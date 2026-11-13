@@ -1,0 +1,142 @@
+/**
+ * MiniMax H3 Ref2VA Prompt Compiler
+ * Translates natural human intent + @mentions into the strict 6-section H3 Ref2VA syntax.
+ * Rule: STRICTLY NO EMPTY LINES between sections.
+ */
+
+export function compileH3Prompt({
+  userPrompt = '',
+  references = [],
+  duration = 5,
+  preset = 'general',
+  cameraMotion = '',
+}) {
+  const cleanPrompt = (userPrompt || '').trim();
+
+  // If there are no references and prompt is empty, return empty
+  if (!cleanPrompt && references.length === 0) {
+    return '';
+  }
+
+  // Group references
+  const imageRefs = references.filter(r => r.type === 'image');
+  const videoRefs = references.filter(r => r.type === 'video');
+  const audioRefs = references.filter(r => r.type === 'audio');
+
+  // 1. subject_definitions
+  const subjectDefs = [];
+  let subjectIdx = 1;
+  const tagToSubjectMap = new Map();
+
+  imageRefs.forEach((ref, idx) => {
+    const picNum = idx + 1;
+    const sNum = subjectIdx++;
+    tagToSubjectMap.set(ref.tag.toLowerCase(), `<Subject ${sNum}>`);
+    tagToSubjectMap.set(`image ${picNum}`.toLowerCase(), `<Subject ${sNum}>`);
+    tagToSubjectMap.set(`image${picNum}`.toLowerCase(), `<Subject ${sNum}>`);
+
+    if (ref.role === 'costume_style' || ref.role === 'costume') {
+      subjectDefs.push(`<Subject ${sNum}> is the costume/outfit from <Picture ${picNum}>, preserving clothing shape, style, fabric texture, and color.`);
+    } else if (ref.role === 'environment' || ref.role === 'style') {
+      subjectDefs.push(`<Subject ${sNum}> is the atmospheric environment and stylistic lighting from <Picture ${picNum}>.`);
+    } else if (ref.role === 'keyframe_start' || ref.role === 'keyframe_end') {
+      subjectDefs.push(`<Picture ${picNum}> acts as the concrete composition keyframe anchor.`);
+    } else {
+      // Default: Character / Face identity
+      subjectDefs.push(`<Subject ${sNum}> is the primary character from <Picture ${picNum}>, preserving facial identity, features, and physical appearance.`);
+    }
+  });
+
+  videoRefs.forEach((ref, idx) => {
+    const vNum = idx + 1;
+    tagToSubjectMap.set(ref.tag.toLowerCase(), `<Video ${vNum}>`);
+    tagToSubjectMap.set(`video ${vNum}`.toLowerCase(), `<Video ${vNum}>`);
+    tagToSubjectMap.set(`video${vNum}`.toLowerCase(), `<Video ${vNum}>`);
+    subjectDefs.push(`<Video ${vNum}> supplies the reference camera movement, tracking rhythm, and pacing without contributing source characters.`);
+  });
+
+  audioRefs.forEach((ref, idx) => {
+    const aNum = idx + 1;
+    tagToSubjectMap.set(ref.tag.toLowerCase(), `<Audio ${aNum}>`);
+    tagToSubjectMap.set(`audio ${aNum}`.toLowerCase(), `<Audio ${aNum}>`);
+    tagToSubjectMap.set(`audio${aNum}`.toLowerCase(), `<Audio ${aNum}>`);
+    subjectDefs.push(`<Audio ${aNum}> supplies the vocal timbre, pace, and delivery for the spoken lines.`);
+  });
+
+  const subjectDefLine = subjectDefs.length > 0 
+    ? `subject_definitions: ${subjectDefs.join(' ')}`
+    : `subject_definitions: <Subject 1> is the primary subject of the video.`;
+
+  // 2. summary
+  const taskTags = [];
+  if (references.length > 0) taskTags.push('reference generation');
+  if (videoRefs.length > 0) taskTags.push('camera motion transfer');
+  if (audioRefs.length > 0) taskTags.push('audio reference');
+  const tagPrefix = taskTags.length > 0 ? `[${taskTags.join(' + ')}] ` : '';
+
+  const summaryLine = `summary: ${tagPrefix}${cleanPrompt ? cleanPrompt.slice(0, 150) : 'Cinematic high-fidelity scene'}.`;
+
+  // 3. retention_analysis
+  const retentionParts = [];
+  imageRefs.forEach((ref, idx) => {
+    const sTag = tagToSubjectMap.get(ref.tag.toLowerCase()) || `<Subject ${idx + 1}>`;
+    if (ref.role === 'costume_style' || ref.role === 'costume') {
+      retentionParts.push(`${sTag} (appears in [Shot 1]): attribute_transfer - garment structure, fabric texture, and color palette are transferred; surrounding background is not copied.`);
+    } else if (ref.role === 'environment') {
+      retentionParts.push(`${sTag} (appears in [Shot 1]): attribute_transfer - lighting tone, color grade, and atmosphere are transferred.`);
+    } else {
+      retentionParts.push(`${sTag} (appears in [Shot 1]): fully_preserved - facial features, identity, hair, and recognizable physical appearance are strictly retained.`);
+    }
+  });
+
+  videoRefs.forEach((ref, idx) => {
+    const vTag = `<Video ${idx + 1}>`;
+    retentionParts.push(`${vTag} (guides [Shot 1]): attribute_transfer - camera speed, focal angle, and movement trajectory are transferred.`);
+  });
+
+  audioRefs.forEach((ref, idx) => {
+    const aTag = `<Audio ${idx + 1}>`;
+    retentionParts.push(`${aTag} (heard in [Shot 1]): reference - vocal resonance and rhythm guide dialogue delivery.`);
+  });
+
+  const retentionLine = retentionParts.length > 0
+    ? `retention_analysis: ${retentionParts.join(' ')}`
+    : `retention_analysis: <Subject 1> (appears in [Shot 1]): fully_preserved - physical appearance and motion coherence are maintained.`;
+
+  // 4. detailed_description
+  // Replace @image1, @video1 mentions in user prompt with <Subject N>
+  let translatedBody = cleanPrompt;
+  tagToSubjectMap.forEach((replacement, tag) => {
+    const regex = new RegExp(tag.replace(/([.*+?^=!:${}()|\[\]\/\\])/g, '\\$1'), 'gi');
+    translatedBody = translatedBody.replace(regex, replacement);
+  });
+
+  let cameraInstruction = '';
+  if (preset === 'tracking' || cameraMotion === 'tracking') {
+    cameraInstruction = 'The camera performs a smooth, low-angle tracking shot following the action with realistic physical parallax.';
+  } else if (preset === 'push_in' || cameraMotion === 'push_in') {
+    cameraInstruction = 'The camera performs a slow, cinematic push-in toward the subject, maintaining crisp focus and soft natural depth of field.';
+  } else if (preset === 'orbit' || cameraMotion === 'orbit') {
+    cameraInstruction = 'The camera executes a controlled semicircular orbit around the focal subject, revealing background perspective smoothly.';
+  } else if (preset === 'drone' || cameraMotion === 'drone') {
+    cameraInstruction = 'An expansive aerial drone sweep glides smoothly forward with cinematic horizon curvature and natural lighting.';
+  } else if (videoRefs.length > 0) {
+    cameraInstruction = `The camera adheres to the exact trajectory and tracking path referenced from <Video 1>.`;
+  } else {
+    cameraInstruction = 'The camera maintains fluid cinematic framing with subtle organic stabilization and realistic depth.';
+  }
+
+  const detailedLine = `detailed_description: The target video is a cinematic high-fidelity sequence. [Shot 1] ${translatedBody || '<Subject 1> is shown in the scene'}. ${cameraInstruction} Lighting, textures, and physics remain photorealistic and coherent throughout the shot.`;
+
+  // 5. overall_soundscape
+  const soundscapeLine = `overall_soundscape: Environmental room tone, subtle fabric movement, gentle footsteps, and crisp atmospheric ambient presence.`;
+
+  // 6. non_diegetic_music
+  const musicLine = `non_diegetic_music: N/A`;
+
+  // Sliding window prefix if needed
+  const windowPrefix = duration ? `[/duration=${duration}s]` : '';
+
+  // Return formatted H3 Ref2VA string strictly on a SINGLE LINE or space-separated sections without empty lines
+  return `${windowPrefix} ${subjectDefLine} ${summaryLine} ${retentionLine} ${detailedLine} ${soundscapeLine} ${musicLine}`.trim();
+}

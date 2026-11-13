@@ -2,1212 +2,804 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { generateVideo, generateI2V, uploadFile, LOCAL_ENGINE_CONNECTED, LOCAL_UPLOADS_ENABLED } from '../local.js';
-import {
-    t2vModels,
-    i2vModels,
-    v2vModels,
-    getAspectRatiosForVideoModel,
-    getDurationsForModel,
-    getResolutionsForVideoModel,
-    getAspectRatiosForI2VModel,
-    getDurationsForI2VModel,
-    getResolutionsForI2VModel,
-    getModesForModel,
-} from '../models.js';
+import { compileH3Prompt } from '../h3Compiler.js';
 
-// ── tiny helpers ──────────────────────────────────────────────────────────────
+// Camera & VFX Presets for MiniMax H3
+const CAMERA_PRESETS = [
+  {
+    id: 'general',
+    name: 'GENERAL',
+    subtitle: 'MiniMax H3',
+    description: 'Manual creative control with natural references & prompts.',
+    icon: '🎬',
+    thumb: '/api/media/preset_general.jpg',
+  },
+  {
+    id: 'tracking',
+    name: 'TRACKING',
+    subtitle: 'Camera Move',
+    description: 'Smooth low-angle tracking shot following the subject.',
+    icon: '🏃',
+  },
+  {
+    id: 'push_in',
+    name: 'PUSH IN',
+    subtitle: 'Dramatic Focus',
+    description: 'Slow, cinematic zoom in toward the character.',
+    icon: '🔍',
+  },
+  {
+    id: 'orbit',
+    name: 'ORBIT',
+    subtitle: '360° Arc',
+    description: 'Controlled semicircular camera orbit around the focal point.',
+    icon: '🔄',
+  },
+  {
+    id: 'drone',
+    name: 'DRONE / AERIAL',
+    subtitle: 'Landscape Sweep',
+    description: 'Expansive forward gliding sweep across the environment.',
+    icon: '🚁',
+  },
+];
 
-function getQualitiesForModel(modelList, modelId) {
-    const model = modelList.find(m => m.id === modelId);
-    return model?.inputs?.quality?.enum || [];
-}
+export default function VideoStudio({ apiKey }) {
+  // Navigation sub-tabs
+  const [subTab, setSubTab] = useState('create'); // 'create' | 'edit' | 'motion'
+  const [refMode, setRefMode] = useState('references'); // 'references' | 'frames'
 
-async function downloadFile(url, filename) {
+  // Model & Presets
+  const [activePreset, setActivePreset] = useState(CAMERA_PRESETS[0]);
+  const [showPresetModal, setShowPresetModal] = useState(false);
+
+  // References state (up to 9 images, 3 videos, 3 audio)
+  const [references, setReferences] = useState([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  // Prompt & Parameters
+  const [prompt, setPrompt] = useState('');
+  const [duration, setDuration] = useState('5s');
+  const [aspectRatio, setAspectRatio] = useState('Auto');
+  const [quality, setQuality] = useState('2K');
+
+  // UI state
+  const [showElementsMenu, setShowElementsMenu] = useState(false);
+  const [showCompiledPrompt, setShowCompiledPrompt] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedVideoUrl, setGeneratedVideoUrl] = useState(null);
+
+  // Refs
+  const imageInputRef = useRef(null);
+  const videoInputRef = useRef(null);
+  const audioInputRef = useRef(null);
+  const textareaRef = useRef(null);
+
+  // Calculate reference counts
+  const imageCount = references.filter(r => r.type === 'image').length;
+  const videoCount = references.filter(r => r.type === 'video').length;
+  const audioCount = references.filter(r => r.type === 'audio').length;
+
+  // Add reference helper
+  const addReferenceItem = (type, url, name) => {
+    setReferences(prev => {
+      const typeList = prev.filter(r => r.type === type);
+      const nextIdx = typeList.length + 1;
+      let tag = `@image${nextIdx}`;
+      let defaultRole = 'character_identity';
+
+      if (type === 'video') {
+        tag = `@video${nextIdx}`;
+        defaultRole = 'camera_motion';
+      } else if (type === 'audio') {
+        tag = `@audio${nextIdx}`;
+        defaultRole = 'voice_reference';
+      } else {
+        if (nextIdx === 2) defaultRole = 'costume_style';
+        else if (nextIdx === 3) defaultRole = 'environment';
+      }
+
+      return [
+        ...prev,
+        {
+          id: Date.now().toString() + Math.random(),
+          type,
+          tag,
+          name: name || `${type}_${nextIdx}`,
+          url,
+          role: defaultRole,
+        },
+      ];
+    });
+  };
+
+  const updateReferenceRole = (id, newRole) => {
+    setReferences(prev => prev.map(r => r.id === id ? { ...r, role: newRole } : r));
+  };
+
+  const removeReference = (id) => {
+    setReferences(prev => {
+      const next = prev.filter(r => r.id !== id);
+      let i = 1, v = 1, a = 1;
+      return next.map(r => {
+        if (r.type === 'video') return { ...r, tag: `@video${v++}` };
+        if (r.type === 'audio') return { ...r, tag: `@audio${a++}` };
+        return { ...r, tag: `@image${i++}` };
+      });
+    });
+  };
+
+  const insertTagIntoPrompt = (tag) => {
+    if (!textareaRef.current) return;
+    const text = prompt || '';
+    const start = textareaRef.current.selectionStart || text.length;
+    const end = textareaRef.current.selectionEnd || text.length;
+    const before = text.substring(0, start);
+    const after = text.substring(end);
+    const needsSpaceBefore = before.length > 0 && !before.endsWith(' ');
+    const needsSpaceAfter = after.length > 0 && !after.startsWith(' ');
+    const insertion = `${needsSpaceBefore ? ' ' : ''}${tag}${needsSpaceAfter ? ' ' : ' '}`;
+    const newText = before + insertion + after;
+    setPrompt(newText);
+    setShowElementsMenu(false);
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        const pos = start + insertion.length;
+        textareaRef.current.setSelectionRange(pos, pos);
+      }
+    }, 10);
+  };
+
+  // Upload handler for files
+  const handleUploadFiles = async (files) => {
+    if (!files || files.length === 0) return;
+    setIsUploading(true);
+    setUploadProgress(0);
+
     try {
-        const response = await fetch(url);
-        const blob = await response.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(blobUrl);
-    } catch {
-        window.open(url, '_blank');
+      for (const file of Array.from(files)) {
+        let type = 'image';
+        if (file.type.startsWith('video/')) type = 'video';
+        else if (file.type.startsWith('audio/')) type = 'audio';
+
+        // Limit checks
+        if (type === 'image' && imageCount >= 9) {
+          alert('Maximum 9 reference images reached.');
+          continue;
+        }
+        if (type === 'video' && videoCount >= 3) {
+          alert('Maximum 3 reference videos reached.');
+          continue;
+        }
+        if (type === 'audio' && audioCount >= 3) {
+          alert('Maximum 3 reference audio files reached.');
+          continue;
+        }
+
+        const url = await uploadFile(apiKey, file, (pct) => setUploadProgress(pct));
+        addReferenceItem(type, url, file.name);
+      }
+    } catch (err) {
+      console.error('[Higgsfield Video Studio] Upload error:', err);
+      alert(`Upload failed: ${err.message}`);
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(0);
+      if (imageInputRef.current) imageInputRef.current.value = '';
+      if (videoInputRef.current) videoInputRef.current.value = '';
+      if (audioInputRef.current) audioInputRef.current.value = '';
     }
-}
+  };
 
-// ── SVG icons (kept inline to avoid extra deps) ───────────────────────────────
-
-const CheckSvg = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d9ff00" strokeWidth="4">
-        <polyline points="20 6 9 17 4 12" />
-    </svg>
-);
-
-const VideoIconSvg = ({ className }) => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
-        <polygon points="23 7 16 12 23 17 23 7" />
-        <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-    </svg>
-);
-
-const VideoReadySvg = () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary">
-        <polygon points="23 7 16 12 23 17 23 7" />
-        <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-        <polyline points="7 10 10 13 15 8" stroke="#d9ff00" strokeWidth="2.5" />
-    </svg>
-);
-
-// ── Dropdown components ───────────────────────────────────────────────────────
-
-function DropdownItem({ label, selected, onClick }) {
-    return (
-        <div
-            className="flex items-center justify-between p-3.5 hover:bg-white/5 rounded-2xl cursor-pointer transition-all group"
-            onClick={onClick}
-        >
-            <span className="text-xs font-bold text-white opacity-80 group-hover:opacity-100 capitalize">{label}</span>
-            {selected && <CheckSvg />}
-        </div>
-    );
-}
-
-function ModelDropdown({ imageMode, selectedModel, onSelect, onClose }) {
-    const [search, setSearch] = useState('');
-
-    const generationModels = imageMode ? i2vModels : t2vModels;
-
-    const lf = search.toLowerCase();
-    const filteredMain = generationModels.filter(
-        m => m.name.toLowerCase().includes(lf) || m.id.toLowerCase().includes(lf)
-    );
-    const filteredV2V = v2vModels.filter(
-        m => m.name.toLowerCase().includes(lf) || m.id.toLowerCase().includes(lf)
-    );
-
-    const getIconColor = (m, isV2V) => {
-        if (isV2V) return 'bg-orange-500/10 text-orange-400';
-        if (m.id.includes('kling')) return 'bg-blue-500/10 text-blue-400';
-        if (m.id.includes('veo')) return 'bg-purple-500/10 text-purple-400';
-        if (m.id.includes('sora')) return 'bg-rose-500/10 text-rose-400';
-        return 'bg-primary/10 text-primary';
+  // Clipboard paste listener (<kbd>Ctrl</kbd> + <kbd>V</kbd>)
+  useEffect(() => {
+    const handlePaste = (e) => {
+      if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length > 0) {
+        handleUploadFiles(e.clipboardData.files);
+      }
     };
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [references]);
 
-    const renderItem = (m, isV2V = false) => (
-        <div
-            key={m.id}
-            className={`flex items-center justify-between p-3.5 hover:bg-white/5 rounded-2xl cursor-pointer transition-all border border-transparent hover:border-white/5 ${selectedModel === m.id ? 'bg-white/5 border-white/5' : ''}`}
-            onClick={(e) => { e.stopPropagation(); onSelect(m, isV2V); onClose(); }}
-        >
-            <div className="flex items-center gap-3.5">
-                <div className={`w-10 h-10 ${getIconColor(m, isV2V)} border border-white/5 rounded-xl flex items-center justify-center font-black text-sm shadow-inner uppercase`}>
-                    {m.name.charAt(0)}
-                </div>
-                <div className="flex flex-col gap-0.5">
-                    <span className="text-xs font-bold text-white tracking-tight">{m.name}</span>
-                    {isV2V && <span className="text-[9px] text-orange-400/70">Upload a video to use</span>}
-                </div>
-            </div>
-            {selectedModel === m.id && <CheckSvg />}
-        </div>
-    );
+  // Compile H3 prompt live
+  const compiledH3Prompt = compileH3Prompt({
+    userPrompt: prompt,
+    references,
+    duration: parseInt(duration) || 5,
+    preset: activePreset.id,
+  });
 
-    return (
-        <div className="flex flex-col h-full max-h-[70vh]">
-            <div className="px-2 pb-3 mb-2 border-b border-white/5 shrink-0">
-                <div className="flex items-center gap-3 bg-white/5 rounded-xl px-4 py-2.5 border border-white/5 focus-within:border-primary/50 transition-colors">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="text-muted">
-                        <circle cx="11" cy="11" r="8" />
-                        <path d="M21 21l-4.35-4.35" />
-                    </svg>
-                    <input
-                        type="text"
-                        placeholder="Search models..."
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        onClick={e => e.stopPropagation()}
-                        className="bg-transparent border-none text-xs text-white focus:ring-0 w-full p-0 outline-none"
-                    />
-                </div>
-            </div>
-            <div className="text-[10px] font-bold text-secondary uppercase tracking-widest px-3 py-2 shrink-0">
-                Video models
-            </div>
-            <div className="flex flex-col gap-1.5 overflow-y-auto custom-scrollbar pr-1 pb-2">
-                {filteredMain.map(m => renderItem(m, false))}
-                {filteredV2V.length > 0 && (
-                    <>
-                        <div className="text-[10px] font-bold text-orange-400/70 uppercase tracking-widest px-3 py-2 mt-1 border-t border-white/5">
-                            Video Tools
-                        </div>
-                        {filteredV2V.map(m => renderItem(m, true))}
-                    </>
-                )}
-            </div>
-        </div>
-    );
-}
-
-// ── Control button ────────────────────────────────────────────────────────────
-
-function ControlBtn({ icon, label, onClick, style }) {
-    return (
-        <button
-            type="button"
-            onClick={onClick}
-            style={style}
-            className="flex items-center gap-1.5 md:gap-2.5 px-3 md:px-4 py-2 md:py-2.5 bg-white/5 hover:bg-white/10 rounded-xl md:rounded-2xl transition-all border border-white/5 group whitespace-nowrap"
-        >
-            {icon}
-            <span className="text-xs font-bold text-white group-hover:text-primary transition-colors">{label}</span>
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" className="opacity-20 group-hover:opacity-100 transition-opacity">
-                <path d="M6 9l6 6 6-6" />
-            </svg>
-        </button>
-    );
-}
-
-// ── Dropdown panel ─────────────────────────────────────────────────────────────
-// Rendered inside a `relative` wrapper div; floats above the anchor button.
-
-
-// ── Main component ────────────────────────────────────────────────────────────
-
-export default function VideoStudio({ apiKey, onGenerationComplete, historyItems }) {
-    // ── mode state ──
-    const [imageMode, setImageMode] = useState(false);   // i2v
-    const [v2vMode, setV2vMode] = useState(false);
-
-    // ── model / params ──
-    const defaultModel = t2vModels[0];
-    const [selectedModel, setSelectedModel] = useState(defaultModel.id);
-    const [selectedModelName, setSelectedModelName] = useState(defaultModel.name);
-    const [selectedAr, setSelectedAr] = useState(defaultModel.inputs?.aspect_ratio?.default || '16:9');
-    const [selectedDuration, setSelectedDuration] = useState(defaultModel.inputs?.duration?.default || 5);
-    const [selectedResolution, setSelectedResolution] = useState(defaultModel.inputs?.resolution?.default || '');
-    const [selectedQuality, setSelectedQuality] = useState(defaultModel.inputs?.quality?.default || '');
-    const [selectedMode, setSelectedMode] = useState('');
-
-    // ── upload progress ──
-    const [imageProgress, setImageProgress] = useState(0);
-    const [videoProgress, setVideoProgress] = useState(0);
-
-    // ── control visibility ──
-    const [showAr, setShowAr] = useState(true);
-    const [showDuration, setShowDuration] = useState(true);
-    const [showResolution, setShowResolution] = useState(false);
-    const [showQuality, setShowQuality] = useState(false);
-    const [showMode, setShowMode] = useState(false);
-
-    // ── uploads ──
-    const [uploadedImageUrl, setUploadedImageUrl] = useState(null);
-    const [imageUploading, setImageUploading] = useState(false);
-    const [uploadedVideoUrl, setUploadedVideoUrl] = useState(null);
-    const [videoUploading, setVideoUploading] = useState(false);
-    const [uploadedVideoName, setUploadedVideoName] = useState(null);
-
-    // ── multi-reference cards for H3 / Higgsfield workflow ──
-    const [references, setReferences] = useState([]);
-    const [isDragOver, setIsDragOver] = useState(false);
-
-    const addReference = (type, url, name) => {
-        setReferences(prev => {
-            const count = prev.filter(r => r.type === type).length + 1;
-            const tag = type === 'video' ? `@video${count}` : `@image${count}`;
-            const defaultRole = type === 'video' 
-                ? 'camera_motion' 
-                : (count === 1 ? 'character_identity' : 'costume_style');
-            const newRef = {
-                id: Date.now().toString() + Math.random(),
-                type,
-                tag,
-                name: name || `${type}_${count}`,
-                url,
-                role: defaultRole,
-            };
-            return [...prev, newRef];
-        });
-    };
-
-    const updateReferenceRole = (id, newRole) => {
-        setReferences(prev => prev.map(r => r.id === id ? { ...r, role: newRole } : r));
-    };
-
-    const removeReference = (id) => {
-        setReferences(prev => {
-            const next = prev.filter(r => r.id !== id);
-            let imgIdx = 1;
-            let vidIdx = 1;
-            return next.map(r => {
-                if (r.type === 'video') {
-                    return { ...r, tag: `@video${vidIdx++}` };
-                } else {
-                    return { ...r, tag: `@image${imgIdx++}` };
-                }
-            });
-        });
-    };
-
-    const insertTagIntoPrompt = (tag) => {
-        if (!textareaRef.current) return;
-        const text = prompt || '';
-        const start = textareaRef.current.selectionStart || text.length;
-        const end = textareaRef.current.selectionEnd || text.length;
-        const before = text.substring(0, start);
-        const after = text.substring(end);
-        const needsSpaceBefore = before.length > 0 && !before.endsWith(' ');
-        const needsSpaceAfter = after.length > 0 && !after.startsWith(' ');
-        const insertion = `${needsSpaceBefore ? ' ' : ''}${tag}${needsSpaceAfter ? ' ' : ' '}`;
-        const newText = before + insertion + after;
-        setPrompt(newText);
-        setTimeout(() => {
-            if (textareaRef.current) {
-                textareaRef.current.focus();
-                const newPos = start + insertion.length;
-                textareaRef.current.setSelectionRange(newPos, newPos);
-            }
-        }, 10);
-    };
-
-    const handleFilesDrop = async (fileList) => {
-        if (!fileList || fileList.length === 0) return;
-        for (const file of Array.from(fileList)) {
-            if (file.type.startsWith('image/')) {
-                setImageUploading(true);
-                try {
-                    const url = await uploadFile(apiKey, file, (pct) => setImageProgress(pct));
-                    setUploadedImageUrl(url);
-                    addReference('image', url, file.name);
-                    setPromptDisabled(false);
-                } catch (err) {
-                    alert(`Failed to upload image: ${err.message}`);
-                } finally {
-                    setImageUploading(false);
-                }
-            } else if (file.type.startsWith('video/')) {
-                setVideoUploading(true);
-                try {
-                    const url = await uploadFile(apiKey, file, (pct) => setVideoProgress(pct));
-                    setUploadedVideoUrl(url);
-                    setUploadedVideoName(file.name);
-                    addReference('video', url, file.name);
-                    setPromptDisabled(false);
-                } catch (err) {
-                    alert(`Failed to upload video: ${err.message}`);
-                } finally {
-                    setVideoUploading(false);
-                }
-            }
-        }
-    };
-
-    // ── generation / canvas ──
-    const [generating, setGenerating] = useState(false);
-    const [generateError, setGenerateError] = useState(null);
-    const [canvasUrl, setCanvasUrl] = useState(null);
-    const [canvasModel, setCanvasModel] = useState(null);
-    const [showCanvas, setShowCanvas] = useState(false);
-    const [lastGenerationId, setLastGenerationId] = useState(null);
-    const [lastGenerationModel, setLastGenerationModel] = useState(null);
-
-    // ── history ──
-    const [localHistory, setLocalHistory] = useState([]);
-    const [activeHistoryIdx, setActiveHistoryIdx] = useState(0);
-
-    // ── dropdown ──
-    const [openDropdown, setOpenDropdown] = useState(null); // 'model'|'ar'|'duration'|'resolution'|'quality'|'mode'|null
-
-    // ── prompt ──
-    const [prompt, setPrompt] = useState('');
-    const [promptDisabled, setPromptDisabled] = useState(false);
-
-    // ── refs ──
-    const containerRef = useRef(null);
-    const textareaRef = useRef(null);
-    const dropdownRef = useRef(null);
-    const imageFileInputRef = useRef(null);
-    const videoFileInputRef = useRef(null);
-    const resultVideoRef = useRef(null);
-
-    // ── derived data ──
-    const history = historyItems ?? localHistory;
-
-    const getCurrentModels = useCallback(() => {
-        if (v2vMode) return v2vModels;
-        return imageMode ? i2vModels : t2vModels;
-    }, [imageMode, v2vMode]);
-
-    const getCurrentAspectRatios = useCallback((id) =>
-        imageMode ? getAspectRatiosForI2VModel(id) : getAspectRatiosForVideoModel(id),
-        [imageMode]);
-
-    const getCurrentDurations = useCallback((id) =>
-        imageMode ? getDurationsForI2VModel(id) : getDurationsForModel(id),
-        [imageMode]);
-
-    const getCurrentResolutions = useCallback((id) =>
-        imageMode ? getResolutionsForI2VModel(id) : getResolutionsForVideoModel(id),
-        [imageMode]);
-
-    const getCurrentModel = useCallback(() =>
-        getCurrentModels().find(m => m.id === selectedModel),
-        [getCurrentModels, selectedModel]);
-
-    // ── update controls when model/mode changes ──────────────────────────────
-    const applyControlsForModel = useCallback((modelId, isImageMode, isV2vMode) => {
-        if (isV2vMode) {
-            setShowAr(false); setShowDuration(false); setShowResolution(false);
-            setShowQuality(false); setShowMode(false);
-            return;
-        }
-
-        const modelList = isImageMode ? i2vModels : t2vModels;
-        const model = modelList.find(m => m.id === modelId);
-
-        const ars = isImageMode ? getAspectRatiosForI2VModel(modelId) : getAspectRatiosForVideoModel(modelId);
-        if (ars.length > 0) { setSelectedAr(ars[0]); setShowAr(true); } else { setShowAr(false); }
-
-        const durations = isImageMode ? getDurationsForI2VModel(modelId) : getDurationsForModel(modelId);
-        if (durations.length > 0) { setSelectedDuration(durations[0]); setShowDuration(true); } else { setShowDuration(false); }
-
-        const resolutions = isImageMode ? getResolutionsForI2VModel(modelId) : getResolutionsForVideoModel(modelId);
-        if (resolutions.length > 0) { setSelectedResolution(resolutions[0]); setShowResolution(true); } else { setShowResolution(false); }
-
-        const qualities = getQualitiesForModel(modelList, modelId);
-        if (qualities.length > 0) {
-            setSelectedQuality(model?.inputs?.quality?.default || qualities[0]);
-            setShowQuality(true);
-        } else { setSelectedQuality(''); setShowQuality(false); }
-
-        const modes = getModesForModel(modelId);
-        if (modes.length > 0) {
-            setSelectedMode(model?.inputs?.mode?.default || modes[0]);
-            setShowMode(true);
-        } else { setSelectedMode(''); setShowMode(false); }
-    }, []);
-
-    // Initialise controls for default model on mount
-    useEffect(() => {
-        applyControlsForModel(defaultModel.id, false, false);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    // ── close dropdown on outside click ─────────────────────────────────────
-    useEffect(() => {
-        if (!openDropdown) return;
-        const handler = (e) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-                setOpenDropdown(null);
-            }
-        };
-        window.addEventListener('click', handler);
-        return () => window.removeEventListener('click', handler);
-    }, [openDropdown]);
-
-    // ── textarea auto-resize ──────────────────────────────────────────────────
-    const handlePromptInput = (e) => {
-        setPrompt(e.target.value);
-        const el = e.target;
-        el.style.height = 'auto';
-        const maxH = window.innerWidth < 768 ? 150 : 250;
-        el.style.height = Math.min(el.scrollHeight, maxH) + 'px';
-    };
-
-    // ── image upload ─────────────────────────────────────────────────────────
-    const handleImageFileChange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        if (file.size > 10 * 1024 * 1024) {
-          alert("Image exceeds 10MB limit.");
-          return;
-        }
-        setImageUploading(true);
-        setImageProgress(0);
+  return (
+    <div className="h-full flex overflow-hidden bg-[#0a0a0a] text-white select-none">
+      
+      {/* ──────────────────────────────────────────────────────────────────────────
+          LEFT SIDEBAR: HIGGSFIELD STUDIO CONTROLS
+          ────────────────────────────────────────────────────────────────────────── */}
+      <aside className="w-[370px] flex-shrink-0 bg-[#0e0e0e] border-r border-white/10 flex flex-col h-full overflow-y-auto custom-scrollbar">
         
-        try {
-            const url = await uploadFile(apiKey, file, (pct) => {
-                setImageProgress(pct);
-            });
-            setUploadedImageUrl(url);
-            addReference('image', url, file.name);
-
-            // Clear v2v if active
-            setUploadedVideoUrl(null);
-            setUploadedVideoName(null);
-            setV2vMode(false);
-
-            if (!imageMode) {
-                const firstI2V = i2vModels[0];
-                setImageMode(true);
-                setSelectedModel(firstI2V.id);
-                setSelectedModelName(firstI2V.name);
-                applyControlsForModel(firstI2V.id, true, false);
-            }
-            setPromptDisabled(false);
-        } catch (err) {
-            console.error('[VideoStudio] Image upload failed:', err);
-            alert(`Image upload failed: ${err.message}`);
-        } finally {
-            setImageUploading(false);
-            setImageProgress(0);
-            if (imageFileInputRef.current) imageFileInputRef.current.value = '';
-        }
-    };
-
-    const clearImageUpload = () => {
-        setUploadedImageUrl(null);
-        setImageMode(false);
-        const first = t2vModels[0];
-        setSelectedModel(first.id);
-        setSelectedModelName(first.name);
-        applyControlsForModel(first.id, false, false);
-        setPromptDisabled(false);
-    };
-
-    // ── video upload ─────────────────────────────────────────────────────────
-    const handleVideoFileChange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        if (file.size > 50 * 1024 * 1024) {
-          alert("Video exceeds 50MB limit.");
-          return;
-        }
-        setVideoUploading(true);
-        setVideoProgress(0);
-        try {
-            const url = await uploadFile(apiKey, file, (pct) => {
-                setVideoProgress(pct);
-            });
-            setUploadedVideoUrl(url);
-            setUploadedVideoName(file.name);
-            addReference('video', url, file.name);
-
-            // Clear image mode if active
-            if (imageMode) {
-                setUploadedImageUrl(null);
-                setImageMode(false);
-            }
-            setV2vMode(true);
-            const firstV2V = v2vModels[0];
-            setSelectedModel(firstV2V.id);
-            setSelectedModelName(firstV2V.name);
-            applyControlsForModel(firstV2V.id, false, true);
-            setPrompt('');
-            setPromptDisabled(true);
-        } catch (err) {
-            console.error('[VideoStudio] Video upload failed:', err);
-            alert(`Video upload failed: ${err.message}`);
-        } finally {
-            setVideoUploading(false);
-            setVideoProgress(0);
-            if (videoFileInputRef.current) videoFileInputRef.current.value = '';
-        }
-    };
-
-    const clearVideoUpload = () => {
-        setUploadedVideoUrl(null);
-        setUploadedVideoName(null);
-        setV2vMode(false);
-        const first = t2vModels[0];
-        setSelectedModel(first.id);
-        setSelectedModelName(first.name);
-        applyControlsForModel(first.id, false, false);
-        setPromptDisabled(false);
-    };
-
-    // ── model selection from dropdown ─────────────────────────────────────────
-    const handleModelSelect = useCallback((m, isV2V) => {
-        if (isV2V) {
-            setV2vMode(true);
-            setImageMode(false);
-            setUploadedImageUrl(null);
-            setUploadedImagePreview(null);
-            setSelectedModel(m.id);
-            setSelectedModelName(m.name);
-            applyControlsForModel(m.id, false, true);
-            setPrompt('');
-            setPromptDisabled(true);
-        } else {
-            if (v2vMode) {
-                setV2vMode(false);
-                setUploadedVideoUrl(null);
-                setUploadedVideoName(null);
-                setPromptDisabled(false);
-            }
-            setSelectedModel(m.id);
-            setSelectedModelName(m.name);
-            applyControlsForModel(m.id, imageMode, false);
-        }
-    }, [v2vMode, imageMode, applyControlsForModel]);
-
-    // ── add to local history ──────────────────────────────────────────────────
-    const addToLocalHistory = useCallback((entry) => {
-        setLocalHistory(prev => [entry, ...prev].slice(0, 30));
-        setActiveHistoryIdx(0);
-    }, []);
-
-    // ── show result in canvas ─────────────────────────────────────────────────
-    const showVideoInCanvas = useCallback((url, model) => {
-        setCanvasUrl(url);
-        setCanvasModel(model);
-        setShowCanvas(true);
-    }, []);
-
-    // ── generate ──────────────────────────────────────────────────────────────
-    const handleGenerate = useCallback(async () => {
-        const currentModel = getCurrentModel();
-        const isExtendMode = currentModel?.requiresRequestId;
-        const trimmedPrompt = prompt.trim();
-
-        if (v2vMode) {
-            if (!uploadedVideoUrl) { alert('Please upload a video first.'); return; }
-        } else if (isExtendMode) {
-            if (!lastGenerationId) { alert('No Seedance 2.0 generation found to extend. Generate a video first.'); return; }
-        } else if (imageMode) {
-            if (!uploadedImageUrl) { alert('Please upload a start frame image first.'); return; }
-        } else {
-            if (!trimmedPrompt) { alert('Please enter a prompt to generate a video.'); return; }
-        }
-
-        setGenerating(true);
-        setGenerateError(null);
-
-        let hadError = false;
-
-        try {
-            let res;
-
-            if (v2vMode) {
-                // V2V: use generateVideo with video_url (the v2v models use the video endpoint)
-                res = await generateVideo(apiKey, {
-                    model: selectedModel,
-                    video_url: uploadedVideoUrl,
-                });
-                if (!res?.url) throw new Error('No video URL returned by API');
-
-                const genId = res.id || Date.now().toString();
-                setLastGenerationId(null);
-                setLastGenerationModel(null);
-                const entry = { id: genId, url: res.url, prompt: '', model: selectedModel, timestamp: new Date().toISOString() };
-                addToLocalHistory(entry);
-                showVideoInCanvas(res.url, selectedModel);
-                if (onGenerationComplete) onGenerationComplete({ url: res.url, model: selectedModel, prompt: '', type: 'video' });
-
-            } else if (imageMode) {
-                const i2vParams = { model: selectedModel, image_url: uploadedImageUrl };
-                if (trimmedPrompt) i2vParams.prompt = trimmedPrompt;
-                i2vParams.aspect_ratio = selectedAr;
-                const durations = getDurationsForI2VModel(selectedModel);
-                if (durations.length > 0) i2vParams.duration = selectedDuration;
-                const resolutions = getResolutionsForI2VModel(selectedModel);
-                if (resolutions.length > 0) i2vParams.resolution = selectedResolution;
-                if (selectedQuality) i2vParams.quality = selectedQuality;
-                if (selectedMode) i2vParams.mode = selectedMode;
-
-                res = await generateI2V(apiKey, i2vParams);
-                if (!res?.url) throw new Error('No video URL returned by API');
-
-                const genId = res.id || Date.now().toString();
-                if (selectedModel === 'seedance-v2.0-i2v') {
-                    setLastGenerationId(genId);
-                    setLastGenerationModel(selectedModel);
-                } else {
-                    setLastGenerationId(null);
-                    setLastGenerationModel(null);
-                }
-                const entry = { id: genId, url: res.url, prompt: trimmedPrompt, model: selectedModel, aspect_ratio: selectedAr, duration: selectedDuration, timestamp: new Date().toISOString() };
-                addToLocalHistory(entry);
-                showVideoInCanvas(res.url, selectedModel);
-                if (onGenerationComplete) onGenerationComplete({ url: res.url, model: selectedModel, prompt: trimmedPrompt, type: 'video' });
-
-            } else {
-                // T2V (including extend mode)
-                const params = { model: selectedModel };
-                if (trimmedPrompt) params.prompt = trimmedPrompt;
-
-                if (isExtendMode) {
-                    params.request_id = lastGenerationId;
-                } else {
-                    params.aspect_ratio = selectedAr;
-                }
-
-                const durations = getDurationsForModel(selectedModel);
-                if (durations.length > 0) params.duration = selectedDuration;
-                const resolutions = getResolutionsForVideoModel(selectedModel);
-                if (resolutions.length > 0) params.resolution = selectedResolution;
-                if (selectedQuality) params.quality = selectedQuality;
-                if (selectedMode) params.mode = selectedMode;
-
-                res = await generateVideo(apiKey, params);
-                if (!res?.url) throw new Error('No video URL returned by API');
-
-                const genId = res.id || Date.now().toString();
-                if (selectedModel === 'seedance-v2.0-t2v' || selectedModel === 'seedance-v2.0-i2v') {
-                    setLastGenerationId(genId);
-                    setLastGenerationModel(selectedModel);
-                } else {
-                    setLastGenerationId(null);
-                    setLastGenerationModel(null);
-                }
-                const entry = { id: genId, url: res.url, prompt: trimmedPrompt, model: selectedModel, aspect_ratio: selectedAr, duration: selectedDuration, timestamp: new Date().toISOString() };
-                addToLocalHistory(entry);
-                showVideoInCanvas(res.url, selectedModel);
-                if (onGenerationComplete) onGenerationComplete({ url: res.url, model: selectedModel, prompt: trimmedPrompt, type: 'video' });
-            }
-        } catch (e) {
-            hadError = true;
-            console.error('[VideoStudio]', e);
-            setGenerateError(e.message?.slice(0, 80) || 'Generation failed');
-            setTimeout(() => setGenerateError(null), 4000);
-        } finally {
-            setGenerating(false);
-        }
-    }, [
-        apiKey, prompt, v2vMode, imageMode, selectedModel, selectedAr, selectedDuration,
-        selectedResolution, selectedQuality, selectedMode, uploadedImageUrl, uploadedVideoUrl,
-        lastGenerationId, getCurrentModel, addToLocalHistory, showVideoInCanvas, onGenerationComplete,
-    ]);
-
-    // ── reset to prompt bar ───────────────────────────────────────────────────
-    const resetToPromptBar = useCallback(() => {
-        setShowCanvas(false);
-    }, []);
-
-    const handleNewPrompt = useCallback(() => {
-        resetToPromptBar();
-        setPrompt('');
-        setUploadedImageUrl(null);
-        setUploadedImagePreview(null);
-        setImageMode(false);
-        setUploadedVideoUrl(null);
-        setUploadedVideoName(null);
-        setV2vMode(false);
-        const first = t2vModels[0];
-        setSelectedModel(first.id);
-        setSelectedModelName(first.name);
-        applyControlsForModel(first.id, false, false);
-        setPromptDisabled(false);
-        setTimeout(() => textareaRef.current?.focus(), 50);
-    }, [resetToPromptBar, applyControlsForModel]);
-
-    const handleExtend = useCallback(() => {
-        if (!lastGenerationId) return;
-        resetToPromptBar();
-        setPrompt('');
-        setUploadedImageUrl(null);
-        setUploadedImagePreview(null);
-        setImageMode(false);
-        setSelectedModel('seedance-v2.0-extend');
-        setSelectedModelName('Seedance 2.0 Extend');
-        applyControlsForModel('seedance-v2.0-extend', false, false);
-        setPromptDisabled(false);
-        setTimeout(() => textareaRef.current?.focus(), 50);
-    }, [lastGenerationId, resetToPromptBar, applyControlsForModel]);
-
-    // ── derived UI values ────────────────────────────────────────────────────
-    const isSeedance2Canvas = canvasModel === 'seedance-v2.0-t2v' || canvasModel === 'seedance-v2.0-i2v';
-    const currentModelObj = getCurrentModel();
-    const isExtendMode = currentModelObj?.requiresRequestId;
-
-    const promptPlaceholder = v2vMode
-        ? 'Video ready — click Generate to remove watermark'
-        : imageMode
-            ? 'Describe the motion or effect (optional)'
-            : isExtendMode
-                ? 'Optional: describe how to continue the video...'
-                : 'Describe the video you want to create';
-
-    const toggleDropdown = (type) => (e) => {
-        e.stopPropagation();
-        setOpenDropdown(prev => prev === type ? null : type);
-    };
-
-    // ── render ────────────────────────────────────────────────────────────────
-    return (
-        <div
-            ref={containerRef}
-            className="w-full h-full flex flex-col items-center justify-center bg-app-bg relative p-4 md:p-6 overflow-y-auto custom-scrollbar overflow-x-hidden"
-        >
-            {/* ── History Sidebar ── */}
-            {history.length > 0 && (
-                <div className="fixed right-0 top-0 h-full w-20 md:w-24 bg-black/60 backdrop-blur-xl border-l border-white/5 z-50 flex flex-col items-center py-4 gap-3 overflow-y-auto transition-all duration-500">
-                    <div className="text-[9px] font-bold text-muted uppercase tracking-widest mb-2">History</div>
-                    <div className="flex flex-col gap-2 w-full px-2">
-                        {history.map((entry, idx) => (
-                            <div
-                                key={entry.id || idx}
-                                className={`relative group/thumb cursor-pointer rounded-xl overflow-hidden border-2 transition-all duration-300 ${activeHistoryIdx === idx ? 'border-primary shadow-glow' : 'border-white/10 hover:border-white/30'}`}
-                                onClick={(e) => {
-                                    if (e.target.closest('.hist-download')) {
-                                        downloadFile(entry.url, `video-${entry.id || idx}.mp4`);
-                                        return;
-                                    }
-                                    setActiveHistoryIdx(idx);
-                                    if (entry.model === 'seedance-v2.0-t2v' || entry.model === 'seedance-v2.0-i2v') {
-                                        setLastGenerationId(entry.id);
-                                        setLastGenerationModel(entry.model);
-                                    } else {
-                                        setLastGenerationId(null);
-                                        setLastGenerationModel(null);
-                                    }
-                                    showVideoInCanvas(entry.url, entry.model);
-                                }}
-                            >
-                                <video src={entry.url} preload="metadata" muted className="w-full aspect-square object-cover" />
-                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/thumb:opacity-100 transition-opacity flex items-center justify-center gap-1">
-                                    <button className="hist-download p-1.5 bg-primary rounded-lg text-black hover:scale-110 transition-transform" title="Download">
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
-                                        </svg>
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {/* ── Canvas / Result View ── */}
-            {showCanvas && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center p-4 min-[800px]:p-16 z-10 transition-all duration-1000">
-                    <div className="relative group">
-                        <video
-                            ref={resultVideoRef}
-                            key={canvasUrl}
-                            src={canvasUrl}
-                            className="max-h-[60vh] max-w-[80vw] rounded-3xl shadow-3xl border border-white/10 interactive-glow object-contain"
-                            controls
-                            loop
-                            autoPlay
-                            muted
-                            playsInline
-                        />
-                    </div>
-                    <div className="mt-6 flex gap-3 justify-center">
-                        <button
-                            type="button"
-                            onClick={handleGenerate}
-                            disabled={!LOCAL_ENGINE_CONNECTED || generating}
-                            className="bg-white/10 hover:bg-white/20 px-6 py-2.5 rounded-2xl text-xs font-bold transition-all border border-white/5 backdrop-blur-lg text-white"
-                        >
-                            ↻ Regenerate
-                        </button>
-                        {isSeedance2Canvas && (
-                            <button
-                                type="button"
-                                onClick={handleExtend}
-                                className="bg-white/10 hover:bg-white/20 px-6 py-2.5 rounded-2xl text-xs font-bold transition-all border border-primary/30 text-primary backdrop-blur-lg"
-                                title="Extend this video using Seedance 2.0 Extend"
-                            >
-                                ↗ Extend
-                            </button>
-                        )}
-                        <button
-                            type="button"
-                            onClick={() => {
-                                const entry = history.find(e => e.url === canvasUrl);
-                                downloadFile(canvasUrl, `video-${entry?.id || 'clip'}.mp4`);
-                            }}
-                            className="bg-primary text-black px-6 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-glow active:scale-95"
-                        >
-                            ↓ Download
-                        </button>
-                        <button
-                            type="button"
-                            onClick={handleNewPrompt}
-                            className="bg-white/10 hover:bg-white/20 px-6 py-2.5 rounded-2xl text-xs font-bold transition-all border border-white/5 backdrop-blur-lg text-white"
-                        >
-                            + New
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* ── Hero + Prompt Bar (hidden when canvas is showing) ── */}
-            {!showCanvas && (
-                <>
-                    {/* Hero */}
-                    <div className="flex flex-col items-center mb-10 md:mb-20 animate-fade-in-up transition-all duration-700">
-                        <div className="mb-10 relative group">
-                            <div className="absolute inset-0 bg-primary/20 blur-[100px] rounded-full opacity-40 group-hover:opacity-70 transition-opacity duration-1000" />
-                            <div className="relative w-24 h-24 md:w-32 md:h-32 bg-teal-900/40 rounded-3xl flex items-center justify-center border border-white/5 overflow-hidden">
-                                <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="text-primary opacity-20 absolute -right-4 -bottom-4">
-                                    <polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-                                </svg>
-                                <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center border border-primary/20 shadow-glow relative z-10">
-                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-primary">
-                                        <polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-                                    </svg>
-                                </div>
-                                <div className="absolute top-4 right-4 text-primary animate-pulse">✨</div>
-                            </div>
-                        </div>
-                        <h1 className="text-2xl sm:text-4xl md:text-7xl font-black text-white tracking-widest uppercase mb-4 selection:bg-primary selection:text-black text-center px-4">
-                            Video Studio
-                        </h1>
-                        <p className="text-secondary text-sm font-medium tracking-wide opacity-60">
-                            Animate images into stunning AI videos with motion effects
-                        </p>
-                    </div>
-
-                    {/* Prompt Bar */}
-                    <div className="w-full max-w-4xl relative z-40 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-                        <div 
-                            onDragOver={(e) => {
-                                e.preventDefault();
-                                e.dataTransfer.dropEffect = 'copy';
-                                setIsDragOver(true);
-                            }}
-                            onDragLeave={(e) => {
-                                e.preventDefault();
-                                setIsDragOver(false);
-                            }}
-                            onDrop={(e) => {
-                                e.preventDefault();
-                                setIsDragOver(false);
-                                handleFilesDrop(e.dataTransfer.files);
-                            }}
-                            className={`w-full bg-[#111]/90 backdrop-blur-xl border ${isDragOver ? 'border-[#d9ff00] ring-2 ring-[#d9ff00]/40' : 'border-white/10'} rounded-[1.5rem] md:rounded-[2.5rem] p-3 md:p-5 flex flex-col gap-3 md:gap-5 shadow-3xl transition-all relative`}
-                        >
-                            {/* Drag Overlay Feedback */}
-                            {isDragOver && (
-                                <div className="absolute inset-0 bg-black/80 backdrop-blur-sm rounded-[1.5rem] md:rounded-[2.5rem] z-50 flex items-center justify-center border-2 border-dashed border-[#d9ff00] pointer-events-none">
-                                    <span className="text-[#d9ff00] font-black text-sm tracking-wide">Drop image or video here to add reference</span>
-                                </div>
-                            )}
-
-                            {/* Reference Tray (Higgsfield Style) */}
-                            {references.length > 0 && (
-                                <div className="flex flex-wrap items-center gap-2 px-2 pb-3 border-b border-white/10">
-                                    <span className="text-[10px] font-black text-white/50 uppercase tracking-widest mr-1">
-                                        References:
-                                    </span>
-                                    {references.map((ref) => (
-                                        <div 
-                                            key={ref.id} 
-                                            className="flex items-center gap-2 bg-[#1a1a1a] hover:bg-[#222] border border-white/10 rounded-xl px-2 py-1 transition-all shadow-sm"
-                                        >
-                                            <div className="w-6 h-6 rounded-lg overflow-hidden bg-black flex-shrink-0 border border-white/10">
-                                                {ref.type === 'video' ? (
-                                                    <video src={ref.url} className="w-full h-full object-cover" muted />
-                                                ) : (
-                                                    <img src={ref.url} alt="" className="w-full h-full object-cover" />
-                                                )}
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => insertTagIntoPrompt(ref.tag)}
-                                                title={`Click to insert ${ref.tag} into prompt`}
-                                                className="text-xs font-mono font-black text-[#d9ff00] hover:underline cursor-pointer"
-                                            >
-                                                {ref.tag}
-                                            </button>
-                                            <select
-                                                value={ref.role}
-                                                onChange={(e) => updateReferenceRole(ref.id, e.target.value)}
-                                                className="bg-black/70 text-[11px] text-white/90 rounded-md px-1.5 py-0.5 border border-white/15 focus:outline-none focus:border-[#d9ff00] cursor-pointer"
-                                            >
-                                                {ref.type === 'video' ? (
-                                                    <>
-                                                        <option value="camera_motion">Camera / Motion</option>
-                                                        <option value="continuation">Continuation</option>
-                                                        <option value="source_edit">Source Edit</option>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <option value="character_identity">Character / Face</option>
-                                                        <option value="costume_style">Costume / Outfit</option>
-                                                        <option value="environment">Environment / Style</option>
-                                                        <option value="keyframe_start">Start Keyframe</option>
-                                                        <option value="keyframe_end">End Keyframe</option>
-                                                    </>
-                                                )}
-                                            </select>
-                                            <button
-                                                type="button"
-                                                onClick={() => removeReference(ref.id)}
-                                                className="text-white/40 hover:text-red-400 text-xs px-1 rounded transition-colors"
-                                                title="Remove reference"
-                                            >
-                                                ✕
-                                            </button>
-                                        </div>
-                                    ))}
-                                    <button
-                                        type="button"
-                                        onClick={() => imageFileInputRef.current?.click()}
-                                        className="text-[11px] text-white/50 hover:text-white flex items-center gap-1 px-2.5 py-1 rounded-xl border border-dashed border-white/20 hover:border-white/50 transition-colors"
-                                    >
-                                        + Add image
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => videoFileInputRef.current?.click()}
-                                        className="text-[11px] text-white/50 hover:text-white flex items-center gap-1 px-2.5 py-1 rounded-xl border border-dashed border-white/20 hover:border-white/50 transition-colors"
-                                    >
-                                        + Add video
-                                    </button>
-                                </div>
-                            )}
-
-                            {/* Top row: image picker + video picker + textarea */}
-                            <div className="flex items-start gap-5 px-2">
-
-                                {/* Image upload button */}
-                                <div className="relative mt-1.5">
-                                    <input
-                                        ref={imageFileInputRef}
-                                        type="file" disabled={!LOCAL_UPLOADS_ENABLED}
-                                        accept="image/*"
-                                        className="hidden"
-                                        onChange={handleImageFileChange}
-                                    />
-                                    <button
-                                        type="button"
-                                        disabled={!LOCAL_UPLOADS_ENABLED}
-                                        title={uploadedImageUrl ? 'Clear image' : 'Upload image for Image-to-Video'}
-                                        onClick={() => uploadedImageUrl ? clearImageUpload() : imageFileInputRef.current?.click()}
-                                        className={`w-10 h-10 shrink-0 rounded-xl border transition-all flex items-center justify-center relative overflow-hidden ${uploadedImageUrl ? 'border-primary/60 bg-primary/10' : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-primary/40'} group`}
-                                    >
-                                        {imageUploading ? (
-                                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 z-10">
-                                                <div className="w-4 h-4 rounded-full border border-primary/30 border-t-primary animate-spin mb-0.5" />
-                                                <span className="text-[8px] font-black text-primary">{imageProgress}%</span>
-                                            </div>
-                                        ) : null}
-                                        
-                                        {uploadedImageUrl ? (
-                                            <img src={uploadedImageUrl} alt="" className={`w-full h-full object-cover rounded-xl ${imageUploading ? 'opacity-40 blur-[2px]' : 'opacity-100'}`} />
-                                        ) : !imageUploading && (
-                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted group-hover:text-primary transition-colors">
-                                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                                                <circle cx="8.5" cy="8.5" r="1.5" />
-                                                <polyline points="21 15 16 10 5 21" />
-                                            </svg>
-                                        )}
-                                    </button>
-                                </div>
-
-                                {/* Video upload button */}
-                                <div className="relative mt-1.5">
-                                    <input
-                                        ref={videoFileInputRef}
-                                        type="file" disabled={!LOCAL_UPLOADS_ENABLED}
-                                        accept="video/*"
-                                        className="hidden"
-                                        onChange={handleVideoFileChange}
-                                    />
-                                    <button
-                                        type="button"
-                                        disabled={!LOCAL_UPLOADS_ENABLED}
-                                        title={uploadedVideoUrl ? `${uploadedVideoName} — click to clear` : 'Upload video to remove watermark'}
-                                        onClick={() => uploadedVideoUrl ? clearVideoUpload() : videoFileInputRef.current?.click()}
-                                        className={`w-10 h-10 shrink-0 rounded-xl border transition-all flex items-center justify-center relative overflow-hidden ${uploadedVideoUrl ? 'border-primary/60 bg-white/5' : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-primary/40'} group`}
-                                    >
-                                        {videoUploading ? (
-                                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 z-10">
-                                                <div className="w-4 h-4 rounded-full border border-primary/30 border-t-primary animate-spin mb-0.5" />
-                                                <span className="text-[8px] font-black text-primary">{videoProgress}%</span>
-                                            </div>
-                                        ) : uploadedVideoUrl ? (
-                                            <video src={uploadedVideoUrl} className={`w-full h-full object-cover rounded-xl ${videoUploading ? 'opacity-40 blur-[2px]' : 'opacity-100'}`} muted />
-                                        ) : (
-                                            <VideoIconSvg className="text-muted group-hover:text-primary transition-colors" />
-                                        )}
-                                    </button>
-                                </div>
-
-                                {/* Prompt textarea */}
-                                <textarea
-                                    ref={textareaRef}
-                                    value={prompt}
-                                    onChange={handlePromptInput}
-                                    placeholder={promptPlaceholder}
-                                    disabled={promptDisabled}
-                                    rows={1}
-                                    className="flex-1 bg-transparent border-none text-white text-base md:text-xl placeholder:text-muted focus:outline-none resize-none pt-2.5 leading-relaxed min-h-[40px] max-h-[150px] md:max-h-[250px] overflow-y-auto custom-scrollbar disabled:opacity-40"
-                                />
-                            </div>
-
-                            {/* Extend banner */}
-                            {isExtendMode && (
-                                <div className="flex items-center gap-2 px-4 py-2 mx-2 mt-2 bg-primary/10 border border-primary/20 rounded-xl text-xs text-primary">
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                        <path d="M5 12h14M12 5l7 7-7 7" />
-                                    </svg>
-                                    <span>Extending previous Seedance 2.0 generation — add an optional prompt to guide the continuation</span>
-                                </div>
-                            )}
-
-                            {/* Bottom row: controls + generate */}
-                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 px-2 pt-4 border-t border-white/5">
-                                <div className="flex items-center gap-1.5 md:gap-2.5 relative flex-wrap">
-
-                                    {/* Model btn */}
-                                    <div className="relative">
-                                        <ControlBtn
-                                            icon={
-                                                <div className="w-5 h-5 bg-primary rounded-md flex items-center justify-center shadow-lg shadow-primary/20">
-                                                    <span className="text-[10px] font-black text-black">V</span>
-                                                </div>
-                                            }
-                                            label={selectedModelName}
-                                            onClick={toggleDropdown('model')}
-                                        />
-                                        {openDropdown === 'model' && (
-                                            <div ref={dropdownRef} onClick={e => e.stopPropagation()} className="absolute bottom-[calc(100%+8px)] left-0 z-50 bg-[#111] rounded-3xl p-3 border border-white/10 flex flex-col w-[calc(100vw-3rem)] max-w-xs">
-                                                <ModelDropdown
-                                                    imageMode={imageMode}
-                                                    selectedModel={selectedModel}
-                                                    onSelect={handleModelSelect}
-                                                    onClose={() => setOpenDropdown(null)}
-                                                />
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Aspect ratio btn */}
-                                    {showAr && (
-                                        <div className="relative">
-                                            <ControlBtn
-                                                icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="opacity-60 text-secondary"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /></svg>}
-                                                label={selectedAr}
-                                                onClick={toggleDropdown('ar')}
-                                            />
-                                            {openDropdown === 'ar' && (
-                                                <div ref={dropdownRef} onClick={e => e.stopPropagation()} className="absolute bottom-[calc(100%+8px)] left-0 z-50 bg-[#111] rounded-3xl p-3 border border-white/10 flex flex-col w-52 max-w-[240px]">
-                                                    <div className="text-[10px] font-bold text-muted uppercase tracking-widest px-3 py-2 border-b border-white/5 mb-2">Aspect Ratio</div>
-                                                    <div className="flex flex-col gap-1">
-                                                        {getCurrentAspectRatios(selectedModel).map(r => (
-                                                            <div
-                                                                key={r}
-                                                                className="flex items-center justify-between p-3.5 hover:bg-white/5 rounded-2xl cursor-pointer transition-all group"
-                                                                onClick={(e) => { e.stopPropagation(); setSelectedAr(r); setOpenDropdown(null); }}
-                                                            >
-                                                                <div className="flex items-center gap-4">
-                                                                    <div className="w-6 h-6 border-2 border-white/20 rounded-md shadow-inner flex items-center justify-center group-hover:border-primary/50 transition-colors">
-                                                                        <div className="w-3 h-3 bg-white/10 rounded-sm" />
-                                                                    </div>
-                                                                    <span className="text-xs font-bold text-white opacity-80 group-hover:opacity-100 transition-opacity">{r}</span>
-                                                                </div>
-                                                                {selectedAr === r && <CheckSvg />}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-
-                                    {/* Duration btn */}
-                                    {showDuration && (
-                                        <div className="relative">
-                                            <ControlBtn
-                                                icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="opacity-60 text-secondary"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>}
-                                                label={`${selectedDuration}s`}
-                                                onClick={toggleDropdown('duration')}
-                                            />
-                                            {openDropdown === 'duration' && (
-                                                <div ref={dropdownRef} onClick={e => e.stopPropagation()} className="absolute bottom-[calc(100%+8px)] left-0 z-50 bg-[#111] rounded-3xl p-3 border border-white/10 flex flex-col w-52 max-w-[240px]">
-                                                    <div className="text-[10px] font-bold text-secondary uppercase tracking-widest px-3 py-2 border-b border-white/5 mb-2">Duration</div>
-                                                    <div className="flex flex-col gap-1">
-                                                        {getCurrentDurations(selectedModel).map(d => (
-                                                            <DropdownItem key={d} label={`${d}s`} selected={selectedDuration === d} onClick={(e) => { e.stopPropagation(); setSelectedDuration(d); setOpenDropdown(null); }} />
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-
-                                    {/* Resolution btn */}
-                                    {showResolution && (
-                                        <div className="relative">
-                                            <ControlBtn
-                                                icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="opacity-60 text-secondary"><path d="M6 2L3 6v15a2 2 0 002 2h14a2 2 0 002-2V6l-3-4H6z" /></svg>}
-                                                label={selectedResolution || '720p'}
-                                                onClick={toggleDropdown('resolution')}
-                                            />
-                                            {openDropdown === 'resolution' && (
-                                                <div ref={dropdownRef} onClick={e => e.stopPropagation()} className="absolute bottom-[calc(100%+8px)] left-0 z-50 bg-[#111] rounded-3xl p-3 border border-white/10 flex flex-col w-52 max-w-[240px]">
-                                                    <div className="text-[10px] font-bold text-secondary uppercase tracking-widest px-3 py-2 border-b border-white/5 mb-2">Resolution</div>
-                                                    <div className="flex flex-col gap-1">
-                                                        {getCurrentResolutions(selectedModel).map(r => (
-                                                            <DropdownItem key={r} label={r} selected={selectedResolution === r} onClick={(e) => { e.stopPropagation(); setSelectedResolution(r); setOpenDropdown(null); }} />
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-
-                                    {/* Quality btn */}
-                                    {showQuality && (
-                                        <div className="relative">
-                                            <ControlBtn
-                                                icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="opacity-60 text-secondary"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>}
-                                                label={selectedQuality || 'basic'}
-                                                onClick={toggleDropdown('quality')}
-                                            />
-                                            {openDropdown === 'quality' && (
-                                                <div ref={dropdownRef} onClick={e => e.stopPropagation()} className="absolute bottom-[calc(100%+8px)] left-0 z-50 bg-[#111] rounded-3xl p-3 border border-white/10 flex flex-col w-52 max-w-[240px]">
-                                                    <div className="text-[10px] font-bold text-secondary uppercase tracking-widest px-3 py-2 border-b border-white/5 mb-2">Quality</div>
-                                                    <div className="flex flex-col gap-1">
-                                                        {getQualitiesForModel(getCurrentModels(), selectedModel).map(q => (
-                                                            <DropdownItem key={q} label={q} selected={selectedQuality === q} onClick={(e) => { e.stopPropagation(); setSelectedQuality(q); setOpenDropdown(null); }} />
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-
-                                    {/* Mode btn */}
-                                    {showMode && (
-                                        <div className="relative">
-                                            <ControlBtn
-                                                icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="opacity-60 text-secondary"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>}
-                                                label={selectedMode || 'normal'}
-                                                onClick={toggleDropdown('mode')}
-                                            />
-                                            {openDropdown === 'mode' && (
-                                                <div ref={dropdownRef} onClick={e => e.stopPropagation()} className="absolute bottom-[calc(100%+8px)] left-0 z-50 bg-[#111] rounded-3xl p-3 border border-white/10 flex flex-col w-52 max-w-[240px]">
-                                                    <div className="text-[10px] font-bold text-secondary uppercase tracking-widest px-3 py-2 border-b border-white/5 mb-2">Mode</div>
-                                                    <div className="flex flex-col gap-1">
-                                                        {getModesForModel(selectedModel).map(m => (
-                                                            <DropdownItem key={m} label={m} selected={selectedMode === m} onClick={(e) => { e.stopPropagation(); setSelectedMode(m); setOpenDropdown(null); }} />
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Generate button */}
-                                <button
-                                    type="button"
-                                    onClick={handleGenerate}
-                                    disabled={!LOCAL_ENGINE_CONNECTED || generating}
-                                    className="bg-primary text-black px-6 md:px-8 py-3 md:py-3.5 rounded-xl md:rounded-[1.5rem] font-black text-sm md:text-base hover:shadow-glow hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2.5 w-full sm:w-auto shadow-lg disabled:opacity-60 disabled:scale-100"
-                                >
-                                    {generating ? (
-                                        <><span className="animate-spin inline-block text-black">◌</span> Generating...</>
-                                    ) : generateError ? (
-                                        `Error: ${generateError}`
-                                    ) : (
-                                        'Generate ✨'
-                                    )}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </>
-            )}
+        {/* Sub-tabs: Create Video | Edit Video | Motion Control */}
+        <div className="flex items-center gap-1 p-3 border-b border-white/5 bg-[#121212]">
+          {[
+            { id: 'create', label: 'Create Video' },
+            { id: 'edit', label: 'Edit Video' },
+            { id: 'motion', label: 'Motion Control' },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setSubTab(tab.id)}
+              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                subTab === tab.id
+                  ? 'bg-white/15 text-white shadow-sm'
+                  : 'text-white/50 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
-    );
+
+        <div className="p-4 flex flex-col gap-4 flex-1">
+
+          {/* Model / Preset Banner */}
+          <div className="relative rounded-2xl bg-[#161616] border border-white/10 p-3.5 flex items-center justify-between group overflow-hidden">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-[#222] border border-white/10 flex items-center justify-center text-xl overflow-hidden shadow-inner">
+                {activePreset.icon}
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xs font-black text-[#d9ff00] tracking-wider uppercase">
+                  {activePreset.name}
+                </span>
+                <span className="text-[11px] text-white/60 font-medium">
+                  {activePreset.subtitle}
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPresetModal(true)}
+              className="text-xs font-semibold text-white/70 hover:text-white bg-white/10 hover:bg-white/20 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 border border-white/5"
+            >
+              <span>✏ Change</span>
+            </button>
+          </div>
+
+          {/* Mode Selector: [References] vs [Frames] */}
+          <div className="flex items-center bg-[#161616] p-1 rounded-xl border border-white/10">
+            <button
+              type="button"
+              onClick={() => setRefMode('references')}
+              className={`flex-1 py-1.5 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+                refMode === 'references'
+                  ? 'bg-[#242424] text-white shadow-sm'
+                  : 'text-white/50 hover:text-white'
+              }`}
+            >
+              <span>🗂 References</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setRefMode('frames')}
+              className={`flex-1 py-1.5 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+                refMode === 'frames'
+                  ? 'bg-[#242424] text-white shadow-sm'
+                  : 'text-white/50 hover:text-white'
+              }`}
+            >
+              <span>🖼 Frames</span>
+            </button>
+          </div>
+
+          {/* Add References Dropzone Card */}
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'copy';
+              setIsDragOver(true);
+            }}
+            onDragLeave={(e) => {
+              e.preventDefault();
+              setIsDragOver(false);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDragOver(false);
+              handleUploadFiles(e.dataTransfer.files);
+            }}
+            className={`border-2 border-dashed rounded-2xl p-4 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${
+              isDragOver
+                ? 'border-[#d9ff00] bg-[#d9ff00]/10 ring-2 ring-[#d9ff00]/30'
+                : 'border-white/15 hover:border-white/30 bg-[#141414]/80'
+            }`}
+            onClick={() => imageInputRef.current?.click()}
+          >
+            {/* Hidden File Inputs */}
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => handleUploadFiles(e.target.files)}
+            />
+            <input
+              ref={videoInputRef}
+              type="file"
+              accept="video/*"
+              multiple
+              className="hidden"
+              onChange={(e) => handleUploadFiles(e.target.files)}
+            />
+            <input
+              ref={audioInputRef}
+              type="file"
+              accept="audio/*"
+              multiple
+              className="hidden"
+              onChange={(e) => handleUploadFiles(e.target.files)}
+            />
+
+            {/* Three Circular Icons: Image, Video, Audio */}
+            <div className="flex items-center gap-2">
+              <div 
+                title="Add Image Reference"
+                onClick={(e) => { e.stopPropagation(); imageInputRef.current?.click(); }}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-[#d9ff00] hover:text-black transition-all flex items-center justify-center text-xs"
+              >
+                🖼
+              </div>
+              <div 
+                title="Add Video Reference"
+                onClick={(e) => { e.stopPropagation(); videoInputRef.current?.click(); }}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-[#d9ff00] hover:text-black transition-all flex items-center justify-center text-xs"
+              >
+                🎥
+              </div>
+              <div 
+                title="Add Audio Reference"
+                onClick={(e) => { e.stopPropagation(); audioInputRef.current?.click(); }}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-[#d9ff00] hover:text-black transition-all flex items-center justify-center text-xs"
+              >
+                🎙
+              </div>
+            </div>
+
+            <div className="text-center">
+              <span className="text-xs font-bold text-white block">
+                {isUploading ? `Uploading... ${uploadProgress}%` : 'Add references'}
+              </span>
+              <span className="text-[10px] text-white/50 block mt-0.5">
+                Up to 9 images, 3 videos, and 3 audio files
+              </span>
+              <span className="text-[9px] text-[#d9ff00]/70 font-mono block mt-1">
+                Drop files here or Paste from Clipboard (<kbd>Ctrl+V</kbd>)
+              </span>
+            </div>
+          </div>
+
+          {/* Reference Chips / Tray (When files exist) */}
+          {references.length > 0 && (
+            <div className="flex flex-col gap-2 bg-[#121212] p-2.5 rounded-2xl border border-white/10">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest">
+                  Attached Elements ({references.length})
+                </span>
+                <span className="text-[9px] text-white/40">
+                  Img: {imageCount}/9 · Vid: {videoCount}/3 · Aud: {audioCount}/3
+                </span>
+              </div>
+              <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto custom-scrollbar">
+                {references.map(ref => (
+                  <div
+                    key={ref.id}
+                    className="flex items-center justify-between gap-2 bg-[#1a1a1a] p-1.5 rounded-xl border border-white/5 hover:border-white/15 transition-all"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-8 h-8 rounded-lg overflow-hidden bg-black/60 flex-shrink-0 border border-white/10">
+                        {ref.type === 'video' ? (
+                          <video src={ref.url} className="w-full h-full object-cover" muted />
+                        ) : ref.type === 'audio' ? (
+                          <div className="w-full h-full flex items-center justify-center text-xs">🎵</div>
+                        ) : (
+                          <img src={ref.url} alt="" className="w-full h-full object-cover" />
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => insertTagIntoPrompt(ref.tag)}
+                        title={`Click to insert ${ref.tag} into prompt`}
+                        className="text-xs font-mono font-bold text-[#d9ff00] hover:underline flex-shrink-0"
+                      >
+                        {ref.tag}
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <select
+                        value={ref.role}
+                        onChange={(e) => updateReferenceRole(ref.id, e.target.value)}
+                        className="bg-black/80 text-[10px] text-white/80 rounded-md px-1.5 py-0.5 border border-white/10 focus:outline-none focus:border-[#d9ff00]"
+                      >
+                        {ref.type === 'video' ? (
+                          <>
+                            <option value="camera_motion">Camera / Motion</option>
+                            <option value="continuation">Continuation</option>
+                            <option value="source_edit">Source Edit</option>
+                          </>
+                        ) : ref.type === 'audio' ? (
+                          <>
+                            <option value="voice_reference">Voice Reference</option>
+                            <option value="soundtrack">Soundtrack / BGM</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value="character_identity">Character / Face</option>
+                            <option value="costume_style">Costume / Outfit</option>
+                            <option value="environment">Environment / Style</option>
+                            <option value="keyframe_start">Start Keyframe</option>
+                            <option value="keyframe_end">End Keyframe</option>
+                          </>
+                        )}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => removeReference(ref.id)}
+                        className="text-white/40 hover:text-red-400 text-xs px-1"
+                        title="Remove"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Prompt Section */}
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-white tracking-wide">
+                Prompt
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowCompiledPrompt(s => !s)}
+                className="text-[10px] text-[#d9ff00] hover:underline font-mono"
+              >
+                {showCompiledPrompt ? 'Hide H3 Syntax ▲' : 'Inspect H3 Syntax ▼'}
+              </button>
+            </div>
+
+            <div className="relative">
+              <textarea
+                ref={textareaRef}
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                rows={4}
+                placeholder="Describe the video. Refer to inputs as Image 1, Video 1, or Audio 1. Add elements using @"
+                className="w-full bg-[#141414] border border-white/10 rounded-2xl p-3 text-xs md:text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-[#d9ff00]/60 resize-none custom-scrollbar leading-relaxed"
+              />
+
+              {/* @ Elements Quick Button */}
+              <div className="flex items-center justify-between mt-1 px-1">
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowElementsMenu(s => !s)}
+                    className="text-[11px] font-bold text-white/70 hover:text-white bg-white/5 hover:bg-white/10 px-2.5 py-1 rounded-lg border border-white/10 transition-all flex items-center gap-1"
+                  >
+                    <span>@ Elements</span>
+                  </button>
+
+                  {/* Elements Popover Menu */}
+                  {showElementsMenu && (
+                    <div className="absolute left-0 bottom-full mb-1 w-52 bg-[#181818] border border-white/15 rounded-xl p-2 shadow-2xl z-50 flex flex-col gap-1">
+                      <span className="text-[9px] font-bold text-white/50 uppercase tracking-widest px-1 pb-1 border-b border-white/5">
+                        Insert Reference Tag
+                      </span>
+                      {references.length === 0 ? (
+                        <span className="text-[10px] text-white/40 p-2 text-center">
+                          No references uploaded yet. Drop an image or video above!
+                        </span>
+                      ) : (
+                        references.map(r => (
+                          <button
+                            key={r.id}
+                            type="button"
+                            onClick={() => insertTagIntoPrompt(r.tag)}
+                            className="flex items-center justify-between p-1.5 rounded-lg hover:bg-white/10 text-left text-xs transition-colors"
+                          >
+                            <span className="font-mono font-bold text-[#d9ff00]">{r.tag}</span>
+                            <span className="text-[10px] text-white/60 truncate max-w-[100px]">{r.name}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <span className="text-[10px] text-white/40 font-mono">
+                  {prompt.length} chars
+                </span>
+              </div>
+            </div>
+
+            {/* Compiled H3 Ref2VA Preview Drawer */}
+            {showCompiledPrompt && (
+              <div className="mt-2 bg-[#090909] border border-[#d9ff00]/30 rounded-xl p-2.5 flex flex-col gap-1 text-[10px] font-mono animate-fade-in">
+                <div className="flex items-center justify-between text-[#d9ff00] font-bold pb-1 border-b border-white/10">
+                  <span>Compiled MiniMax H3 Ref2VA</span>
+                  <span className="text-[9px] text-white/40">Zero empty lines</span>
+                </div>
+                <div className="text-white/80 max-h-36 overflow-y-auto break-all custom-scrollbar whitespace-pre-wrap leading-relaxed">
+                  {compiledH3Prompt || '// Add prompt text or references to preview compiled H3 syntax'}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Parameters Grid */}
+          <div className="flex flex-col gap-2.5 pt-2 border-t border-white/5">
+            {/* Model Row */}
+            <div className="flex items-center justify-between bg-[#141414] p-2.5 rounded-xl border border-white/10">
+              <span className="text-xs font-bold text-white/60">Model</span>
+              <span className="text-xs font-black text-[#d9ff00] flex items-center gap-1">
+                MiniMax H3 <span className="text-[10px]">✨</span>
+              </span>
+            </div>
+
+            {/* Duration & Aspect Ratio */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-col gap-1 bg-[#141414] p-2 rounded-xl border border-white/10">
+                <span className="text-[10px] font-bold text-white/50 uppercase">Duration</span>
+                <select
+                  value={duration}
+                  onChange={(e) => setDuration(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-white focus:outline-none cursor-pointer"
+                >
+                  <option value="5s" className="bg-[#141414]">5s</option>
+                  <option value="10s" className="bg-[#141414]">10s</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1 bg-[#141414] p-2 rounded-xl border border-white/10">
+                <span className="text-[10px] font-bold text-white/50 uppercase">Aspect Ratio</span>
+                <select
+                  value={aspectRatio}
+                  onChange={(e) => setAspectRatio(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-white focus:outline-none cursor-pointer"
+                >
+                  <option value="Auto" className="bg-[#141414]">Auto</option>
+                  <option value="16:9" className="bg-[#141414]">16:9 (Landscape)</option>
+                  <option value="9:16" className="bg-[#141414]">9:16 (Portrait)</option>
+                  <option value="1:1" className="bg-[#141414]">1:1 (Square)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Quality Row */}
+            <div className="flex items-center justify-between bg-[#141414] p-2.5 rounded-xl border border-white/10">
+              <span className="text-xs font-bold text-white/50 uppercase">Quality</span>
+              <div className="flex items-center gap-1">
+                {['720p', '1080p', '2K'].map(q => (
+                  <button
+                    key={q}
+                    type="button"
+                    onClick={() => setQuality(q)}
+                    className={`px-2 py-0.5 text-[11px] font-bold rounded-md transition-all ${
+                      quality === q
+                        ? 'bg-[#d9ff00] text-black'
+                        : 'text-white/60 hover:text-white bg-white/5'
+                    }`}
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Big Lime-Green Generate Button */}
+          <div className="mt-auto pt-3">
+            <button
+              type="button"
+              disabled={isGenerating}
+              onClick={() => {
+                alert(`H3 Prompt Compiled:\n\n${compiledH3Prompt}\n\n(Local engine execution will connect to Wan2GP in the next phase).`);
+              }}
+              className="w-full bg-[#d9ff00] text-black font-black text-sm py-3.5 rounded-2xl hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
+            >
+              <span>Generate ✨</span>
+              <span className="text-[10px] font-mono bg-black/15 px-2 py-0.5 rounded-full">
+                2Q 10
+              </span>
+            </button>
+          </div>
+
+        </div>
+      </aside>
+
+      {/* ──────────────────────────────────────────────────────────────────────────
+          MAIN CENTER STAGE: HIGGSFIELD STUDIO WORKFLOW CANVAS
+          ────────────────────────────────────────────────────────────────────────── */}
+      <main className="flex-1 flex flex-col h-full overflow-y-auto custom-scrollbar p-6 md:p-10">
+        
+        {/* Top Navbar */}
+        <div className="flex items-center justify-between pb-6 border-b border-white/5">
+          <div className="flex items-center gap-3">
+            <button className="text-xs font-bold text-white/70 hover:text-white flex items-center gap-1.5 px-3 py-1.5 bg-white/5 rounded-xl border border-white/10">
+              📁 History
+            </button>
+            <button className="text-xs font-bold text-white/50 hover:text-white flex items-center gap-1.5 px-3 py-1.5">
+              📖 How it works
+            </button>
+          </div>
+          <span className="text-xs text-white/40 font-mono">Local Wan2GP MiniMax H3</span>
+        </div>
+
+        {/* Hero Section: MAKE VIDEOS IN ONE CLICK */}
+        <div className="pt-6 pb-8">
+          <h1 className="text-2xl md:text-4xl font-black text-white tracking-tight uppercase">
+            Make Videos In One Click
+          </h1>
+          <p className="text-sm md:text-base text-white/50 mt-1.5 max-w-2xl font-medium">
+            250+ presets for camera control, framing, and high-quality VFX — or use the general preset for manual control.
+          </p>
+        </div>
+
+        {/* 3-Step Interactive Visual Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
+          
+          {/* Card 1: ADD IMAGE */}
+          <div 
+            onClick={() => imageInputRef.current?.click()}
+            className="flex flex-col bg-[#111] border border-white/10 hover:border-[#d9ff00]/60 rounded-3xl p-6 transition-all group cursor-pointer shadow-xl relative overflow-hidden"
+          >
+            <div className="aspect-[4/3] rounded-2xl border-2 border-dashed border-white/15 group-hover:border-[#d9ff00]/60 flex flex-col items-center justify-center gap-3 bg-[#161616] transition-colors relative overflow-hidden">
+              {references.find(r => r.type === 'image') ? (
+                <img 
+                  src={references.find(r => r.type === 'image')?.url} 
+                  alt="" 
+                  className="w-full h-full object-cover rounded-2xl" 
+                />
+              ) : (
+                <>
+                  <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-xl text-white/80 group-hover:scale-110 transition-transform">
+                    🖼
+                  </div>
+                  <div className="text-center">
+                    <span className="text-xs font-black text-white uppercase tracking-wider block">
+                      Upload Image
+                    </span>
+                    <span className="text-[10px] text-[#d9ff00] block mt-1">
+                      Paste from Clipboard
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="mt-4">
+              <span className="text-xs font-black text-white uppercase tracking-wider block">
+                1. Add Image
+              </span>
+              <span className="text-[11px] text-white/50 mt-1 block">
+                Upload or generate an image to start your animation
+              </span>
+            </div>
+          </div>
+
+          {/* Card 2: CHOOSE PRESET */}
+          <div className="flex flex-col bg-[#111] border border-white/10 rounded-3xl p-6 shadow-xl">
+            <div className="aspect-[4/3] rounded-2xl bg-[#161616] border border-white/10 p-3 flex flex-col gap-2 overflow-y-auto custom-scrollbar">
+              {CAMERA_PRESETS.map(p => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setActivePreset(p)}
+                  className={`flex items-center gap-3 p-2.5 rounded-xl text-left transition-all ${
+                    activePreset.id === p.id
+                      ? 'bg-[#d9ff00] text-black font-black'
+                      : 'hover:bg-white/5 text-white/80'
+                  }`}
+                >
+                  <span className="text-lg">{p.icon}</span>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-xs font-bold leading-tight">{p.name}</span>
+                    <span className={`text-[10px] truncate ${activePreset.id === p.id ? 'text-black/70' : 'text-white/40'}`}>
+                      {p.description}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+            <div className="mt-4">
+              <span className="text-xs font-black text-white uppercase tracking-wider block">
+                2. Choose Preset
+              </span>
+              <span className="text-[11px] text-white/50 mt-1 block">
+                Pick a preset to control your camera and image movement
+              </span>
+            </div>
+          </div>
+
+          {/* Card 3: GET VIDEO */}
+          <div className="flex flex-col bg-[#111] border border-white/10 rounded-3xl p-6 shadow-xl">
+            <div className="aspect-[4/3] rounded-2xl bg-[#161616] border border-white/10 flex flex-col items-center justify-center p-4 text-center relative overflow-hidden">
+              {generatedVideoUrl ? (
+                <video src={generatedVideoUrl} controls autoPlay loop className="w-full h-full object-cover rounded-xl" />
+              ) : (
+                <div className="flex flex-col items-center justify-center gap-2">
+                  <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center text-xl text-white/60">
+                    🎬
+                  </div>
+                  <span className="text-xs font-bold text-white/70">Ready to Render</span>
+                  <span className="text-[10px] text-white/40 max-w-[180px]">
+                    Your video will render here with full audio & motion sync.
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="mt-4">
+              <span className="text-xs font-black text-white uppercase tracking-wider block">
+                3. Get Video
+              </span>
+              <span className="text-[11px] text-white/50 mt-1 block">
+                Click generate to create your final animated video!
+              </span>
+            </div>
+          </div>
+
+        </div>
+
+      </main>
+
+      {/* Preset Modal */}
+      {showPresetModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#141414] border border-white/15 rounded-3xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-4">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <h3 className="text-base font-black text-white uppercase tracking-wide">
+                Select Camera Preset
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowPresetModal(false)}
+                className="text-white/40 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="grid grid-cols-1 gap-2.5 max-h-80 overflow-y-auto custom-scrollbar">
+              {CAMERA_PRESETS.map(preset => (
+                <button
+                  key={preset.id}
+                  onClick={() => {
+                    setActivePreset(preset);
+                    setShowPresetModal(false);
+                  }}
+                  className={`p-3 rounded-2xl border text-left flex items-center gap-3.5 transition-all ${
+                    activePreset.id === preset.id
+                      ? 'border-[#d9ff00] bg-[#d9ff00]/10 text-white'
+                      : 'border-white/10 hover:border-white/30 bg-white/5 text-white/80'
+                  }`}
+                >
+                  <span className="text-2xl">{preset.icon}</span>
+                  <div className="flex flex-col">
+                    <span className="text-xs font-black text-[#d9ff00]">{preset.name}</span>
+                    <span className="text-[11px] text-white/60">{preset.description}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
 }

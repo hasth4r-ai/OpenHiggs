@@ -4,14 +4,14 @@ import { useState } from 'react';
 import { ImageStudio, VideoStudio, LipSyncStudio, CinemaStudio } from 'studio';
 
 const TABS = [
-  { id: 'image', label: 'Image Studio' },
-  { id: 'video', label: 'Video Studio' },
-  { id: 'lipsync', label: 'Lip Sync' },
+  { id: 'video', label: 'Video' },
+  { id: 'image', label: 'Image' },
+  { id: 'lipsync', label: 'Audio / LipSync' },
   { id: 'cinema', label: 'Cinema Studio' },
 ];
 
 export default function StandaloneShell() {
-  const [activeTab, setActiveTab] = useState('image');
+  const [activeTab, setActiveTab] = useState('video');
   const [showSettings, setShowSettings] = useState(false);
 
   return (
@@ -50,7 +50,7 @@ export default function StandaloneShell() {
         <span className="hidden sm:inline text-xs text-white/40 font-mono">127.0.0.1:3000</span>
       </div>
 
-      <main className="flex-1 min-h-0 overflow-y-auto">
+      <main className="flex-1 min-h-0 h-full flex flex-col overflow-hidden">
         {activeTab === 'image' && <ImageStudio apiKey={null} />}
         {activeTab === 'video' && <VideoStudio apiKey={null} />}
         {activeTab === 'lipsync' && <LipSyncStudio apiKey={null} />}
