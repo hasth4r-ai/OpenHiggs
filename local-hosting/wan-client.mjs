@@ -75,15 +75,21 @@ export async function generate({base,wanRoot,uploadsDir,outputDir,ffmpeg,body},s
   if(!resolutions[body.quality || '480p']) throw new Error('Unsupported resolution');
   Object.assign(settings,{model_type:'minimax_h3_ref2va_pruned',prompt:body.compiledPrompt || body.prompt,resolution:resolutions[body.quality || '480p'],video_length:Math.round(seconds*24/4)*4,force_fps:'24',num_inference_steps:20,batch_size:1,repeat_generation:1,seed:-1,prompt_enhancer:'',activated_loras:[],loras_multipliers:'',output_filename:tag,client_id:session,image_refs:refs.image.length?refs.image:null,video_prompt_type:(refs.image.length?'I':'')+['','V-U','V+-U','V+*-U'][refs.video.length],audio_prompt_type:['','A','AB','ABD'][refs.audio.length]});
   for(const kind of ['video','audio']) for(let i=0;i<3;i++) settings[`${kind}_guide${i?i+1:''}`]=refs[kind][i] || null;
+  // A multiline storyboard is one request, never one generation per line.
+  settings.multi_prompts_gen_type = 'FG';
   files.unshift(['queue.json',Buffer.from(JSON.stringify([{id:1,params:settings}]))]);
   const form=new FormData();form.append('files',new Blob([zipFiles(files)]),'openhiggs.zip');
   const upload=await fetch(`${base}/gradio_api/upload`,{method:'POST',body:form});
   if(!upload.ok) throw new Error(`Wan2GP upload failed: HTTP ${upload.status}`);
   const [uploaded]=await upload.json();
   log({tag,settings:{...settings,prompt:'[omitted]'}});
-  let accepted=false; const loaded=await call(base,'load_queue_action',[{path:uploaded,meta:{_type:'gradio.FileData'}}],session,v=>{log(v);if(v.engine?.log?.match(/Loaded 1 task/))accepted=true;});
+  let accepted=false, rejection=''; const loaded=await call(base,'load_queue_action',[{path:uploaded,meta:{_type:'gradio.FileData'}}],session,v=>{
+    log(v);
+    if(v.engine?.log?.match(/(?:Loaded|Merged) 1 task/))accepted=true;
+    if(v.engine?.level==='warning')rejection=v.engine.log;
+  });
   log({loaded});
-  if(!accepted) throw new Error('Wan2GP did not accept the generation task. See generation log.');
+  if(!accepted) throw new Error(rejection || 'Wan2GP did not accept the generation task. See generation log.');
   await call(base,'init_process_queue_if_any',[],session,log);
   let running=true, pollingError=null, sample=null;
   const polling=(async()=>{

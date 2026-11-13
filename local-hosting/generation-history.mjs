@@ -8,7 +8,15 @@ export function historyDirectory() {return path.resolve(process.cwd(),'..','data
 export async function saveGeneration(record) {
   const dir=historyDirectory(); await fs.mkdir(dir,{recursive:true});
   const target=path.join(dir,`${record.id}.json`), temp=`${target}.${randomUUID()}.tmp`;
-  await fs.writeFile(temp,JSON.stringify(record,null,2)); await fs.rename(temp,target);
+  await fs.writeFile(temp,JSON.stringify(record,null,2));
+  // Windows readers/antivirus can briefly lock the destination during polling.
+  for(let attempt=0;;attempt++) {
+    try {await fs.rename(temp,target);break;}
+    catch(error) {
+      if(!['EPERM','EACCES','EBUSY'].includes(error.code)||attempt>=8)throw error;
+      await new Promise(resolve=>setTimeout(resolve,50*(attempt+1)));
+    }
+  }
 }
 export async function listGenerations() {
   const dir=historyDirectory(); await fs.mkdir(dir,{recursive:true});
