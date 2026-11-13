@@ -1,0 +1,32 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import assert from 'node:assert/strict';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import {probeVideo,validatePair,normalizeMask,compositeProRes,makePreview,uploadedPath} from './inpaint-media.mjs';
+import {inpaintSettings} from './inpaint-settings.mjs';
+const run=promisify(execFile),ffmpeg=process.argv[2];
+if(!ffmpeg)throw new Error('Pass the installed FFmpeg executable as the first argument.');
+const dir=await fs.mkdtemp(path.join(os.tmpdir(),'openhiggs-inpaint-test-'));
+const file=n=>path.join(dir,n);
+const ff=async args=>run(ffmpeg,['-nostdin','-y','-threads','2',...args],{windowsHide:true,maxBuffer:4*1024*1024});
+await ff(['-f','lavfi','-i','color=blue:s=64x64:r=24:d=0.5','-f','lavfi','-i','sine=frequency=1000:duration=0.5','-c:v','prores_ks','-profile:v','3','-pix_fmt','yuv422p10le','-threads','2','-c:a','pcm_s24le','-shortest',file('source.mov')]);
+await ff(['-f','lavfi','-i','color=red:s=64x64:r=24:d=0.5','-c:v','prores_ks','-profile:v','3','-pix_fmt','yuv422p10le','-threads','2',file('edited.mov')]);
+await ff(['-f','lavfi','-i','color=black:s=64x64:r=24:d=0.5,drawbox=x=0:y=0:w=32:h=64:color=white:t=fill','-c:v','ffv1','-threads','2',file('mask.mkv')]);
+const info=await probeVideo(ffmpeg,file('source.mov')),maskInfo=await probeVideo(ffmpeg,file('mask.mkv'));
+validatePair(info,maskInfo);assert.throws(()=>validatePair(info,{...maskInfo,frames:11}),/frame count/);assert.throws(()=>validatePair(info,{...maskInfo,width:32}),/dimensions/);await assert.rejects(uploadedPath(dir,'/api/media/..%2Fsecret.mov'),/Invalid/);
+const settings=inpaintSettings({}, {custom_settings:{h3_mask_mode:'grouped_rows'}},{mode:'remove',prompt:'Remove object.\nReconstruct background.',reference:'/api/media/ref.png',sourceExtension:'.mov',referenceExtension:'.png'},info,'test');
+assert.equal(settings.multi_prompts_gen_type,'FG');assert.equal(settings.video_prompt_type,'GVAI');assert.equal(settings.video_mask,'mask.mkv');assert.equal(settings.force_fps,'control');assert.equal(settings.video_length,12);assert.deepEqual(settings.activated_loras,[]);
+await normalizeMask({ffmpeg,input:file('mask.mkv'),output:file('normalized.mkv'),info,invert:false,expand:0});
+for(const profile of ['422','422hq','4444']){
+  const output=file(profile+'.mov');await compositeProRes({ffmpeg,source:file('source.mov'),generated:file('edited.mov'),mask:file('normalized.mkv'),output,info,profile,feather:0});
+  const p=await probeVideo(ffmpeg,output);assert.equal(p.codec,'prores');assert.equal(p.frames,12);assert.equal(p.fps,24);assert.equal(p.width,64);assert.equal(p.hasAudio,true);
+}
+const {stdout:pixels}=await run(ffmpeg,['-v','error','-i',file('422hq.mov'),'-frames:v','1','-f','rawvideo','-pix_fmt','rgb24','pipe:1'],{encoding:'buffer',windowsHide:true});
+const left=(32*64+8)*3,right=(32*64+56)*3;assert(pixels[left]>220&&pixels[left+2]<25,'White mask must select edited red pixels');assert(pixels[right+2]>220&&pixels[right]<25,'Black mask must preserve original blue pixels');
+await normalizeMask({ffmpeg,input:file('mask.mkv'),output:file('inverse.mkv'),info,invert:true,expand:2});
+await compositeProRes({ffmpeg,source:file('source.mov'),generated:file('edited.mov'),mask:file('inverse.mkv'),output:file('inverse.mov'),info,profile:'422hq',feather:2,keepAudio:false});
+assert.equal((await probeVideo(ffmpeg,file('inverse.mov'))).hasAudio,false);
+await makePreview({ffmpeg,input:file('422hq.mov'),output:file('preview.mp4')});assert.equal((await probeVideo(ffmpeg,file('preview.mp4'))).codec,'h264');
+console.log('PASS: MOV inputs, mask alignment, safe paths, one-task preset, RGB compositing, all 3 ProRes profiles, frame rate/count, original audio, invert/expand/feather and H.264 preview. No model or GPU used.');

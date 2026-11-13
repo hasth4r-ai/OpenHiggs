@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { generateVideo, generateI2V, uploadFile, LOCAL_ENGINE_CONNECTED, LOCAL_UPLOADS_ENABLED } from '../local.js';
 import GenerationHistory from './GenerationHistory.jsx';
+import InpaintStudio from './InpaintStudio.jsx';
 import { compileH3Prompt } from '../h3Compiler.js';
 import { 
   ImageIcon, VideoCameraIcon, MicrophoneIcon, SparkleIcon, EditPencilIcon,
@@ -52,6 +53,7 @@ const CAMERA_PRESETS = [
 export default function VideoStudio({ apiKey }) {
   // Navigation sub-tabs
   const [subTab, setSubTab] = useState('create'); // 'create' | 'edit' | 'motion'
+  const [inpaintDraft,setInpaintDraft]=useState(null);
   const [refMode, setRefMode] = useState('references'); // 'references' | 'frames'
 
   // Model & Presets
@@ -312,6 +314,7 @@ export default function VideoStudio({ apiKey }) {
     }
   };
 
+  if(subTab==='edit')return <InpaintStudio onBack={()=>setSubTab('create')} initialDraft={inpaintDraft} blocked={isGenerating}/>;
   return (
     <div className="h-full flex overflow-hidden bg-[#0a0a0a] text-white select-none">
       
@@ -738,6 +741,7 @@ export default function VideoStudio({ apiKey }) {
       </aside>
 
       <GenerationHistory refreshKey={historyVersion} disabled={isGenerating} onReuse={item => {
+        if(item.workflow==='inpaint'){setInpaintDraft(item.inpaintRequest);setSubTab('edit');return;}
         setPrompt(item.prompt || '');
         if (Number(item.duration) > 0) setDuration((Number(item.duration) > 7.5 ? 10 : 5) + 's');
         if (['480p', '720p', '1080p'].includes(item.quality)) setQuality(item.quality);

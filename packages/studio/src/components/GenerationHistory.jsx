@@ -10,7 +10,7 @@ const dateLabel = value => {
   return date.toDateString()===today.toDateString()?'Yesterday':date.toLocaleDateString(undefined,{month:'long',day:'numeric',year:'numeric'});
 };
 
-export default function GenerationHistory({refreshKey,onReuse,disabled}) {
+export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyChange}) {
   const [items,setItems]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState('');
   const [query,setQuery]=useState(''),[filter,setFilter]=useState('all'),[view,setView]=useState('list');
   const [detail,setDetail]=useState(null),[notice,setNotice]=useState(''),[now,setNow]=useState(Date.now());
@@ -47,6 +47,7 @@ export default function GenerationHistory({refreshKey,onReuse,disabled}) {
   useEffect(()=>{if(detail && !dialog.current?.open)dialog.current?.showModal();},[detail]);
   useEffect(()=>{if(!notice)return;const timer=setTimeout(()=>setNotice(''),3000);return()=>clearTimeout(timer);},[notice]);
   const busy=disabled || items.some(i=>i.status==='generating');
+  useEffect(()=>{onBusyChange?.(items.some(i=>i.status==='generating'));},[items,onBusyChange]);
   const changeView=value=>{setView(value);localStorage.setItem('openhiggs-history-view',value);};
   const copy=async item=>{try{await navigator.clipboard.writeText(item.prompt);setNotice('Prompt copied');}catch{setNotice('Could not copy. Open the details to select the prompt.');}};
   const filtered=items.filter(i=>(filter==='all'||i.status===filter||(filter==='failed'&&i.status==='interrupted'))&&`${i.prompt} ${i.model} ${i.fileName}`.toLowerCase().includes(query.toLowerCase()));
@@ -56,6 +57,7 @@ export default function GenerationHistory({refreshKey,onReuse,disabled}) {
     <button className={button} disabled={!item.prompt||busy} onClick={()=>{onReuse(item);dialog.current?.close();setNotice(item.promptSource && !item.references?.length?'Prompt restored. Reattach the original references before generating.':'Settings restored. Edit the prompt, then Generate.');}}>Reuse settings</button>
     <button className={button} disabled={!item.prompt} onClick={()=>copy(item)}>Copy prompt</button>
     {item.videoUrl && <a className={button+' flex items-center gap-1.5'} href={item.videoUrl} download={item.fileName}><DownloadIcon className="w-3.5 h-3.5"/>Download</a>}
+    {item.originalUrl && <a className={button+' !text-[#d9ff00]'} href={item.originalUrl} download={item.originalFileName}>Download ProRes MOV</a>}
     {item.status==='generating'?<button className={button+' !text-red-300'} disabled={pending===item.id||item.cancelRequested} onClick={()=>act(item,'cancel')}>{item.cancelRequested?'Cancelling…':'Cancel task'}</button>:<button className={button+' !text-white/40 hover:!text-red-300'} disabled={pending===item.id} onClick={()=>act(item,'delete')}>Delete from history</button>}
   </div>;
   const preview=item=>item.status==='completed' && item.videoUrl ?

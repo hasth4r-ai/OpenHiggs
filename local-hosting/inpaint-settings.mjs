@@ -1,0 +1,11 @@
+export function inpaintSettings(defaults,preset,body,info,session) {
+  if(!['remove','replace'].includes(body.mode))throw new Error('Choose Remove or Replace.');
+  if(!String(body.prompt||'').trim())throw new Error('Describe what to remove or replace.');
+  const denoise=Number(body.denoise??1),expand=Number(body.expand??0),feather=Number(body.feather??2);
+  if(!Number.isFinite(denoise)||denoise<0.1||denoise>1)throw new Error('Denoising must be between 0.1 and 1.');
+  if(!Number.isInteger(expand)||expand<0||expand>32||!Number.isFinite(feather)||feather<0||feather>16)throw new Error('Invalid mask expansion or feathering.');
+  const ref=body.reference? ' Use <Picture 1> as an appearance and scene guide. It is not a timestamp anchor.':'';
+  const instruction=body.mode==='remove'?'Remove the masked object and reconstruct the background behind it. Do not replace it with another object.':'Replace the masked object as described, matching scene perspective, lighting, contact shadows and motion.';
+  const prompt=`integrated_multimodal_description: [Shot 1] Edit the supplied footage within the masked area. ${instruction}${ref} ${body.prompt.trim()} Preserve the original camera motion, scene continuity and unmasked scene. Maintain temporal consistency across frames.\noverall_soundscape: Preserve the original scene ambience.\nnon_diegetic_music: N/A`;
+  return {...defaults,...preset,model_type:'minimax_h3_ref2va_pruned',client_id:session,prompt,prompt_enhancer:'',multi_prompts_gen_type:'FG',activated_loras:[],loras_multipliers:'',resolution:`${info.width}x${info.height}`,video_length:info.frames,force_fps:'control',video_prompt_type:body.reference?'GVAI':'GVA',video_guide:'source'+body.sourceExtension,video_mask:'mask.mkv',image_refs:body.reference?['reference'+body.referenceExtension]:null,image_start:null,image_end:null,video_source:null,video_guide2:null,video_guide3:null,audio_guide:null,audio_guide2:null,audio_guide3:null,audio_source:null,audio_prompt_type:'',denoising_strength:denoise,masking_strength:1,mask_expand:0,num_inference_steps:20,batch_size:1,repeat_generation:1,output_filename:`inpaint_${session}`,custom_settings:{...preset.custom_settings,h3_mask_mode:'grouped_rows'}};
+}

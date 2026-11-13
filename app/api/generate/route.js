@@ -1,3 +1,4 @@
+import {acquireGeneration,releaseGeneration} from '../../../local-hosting/generation-lock.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { generate } from '../../../local-hosting/wan-client.mjs';
@@ -15,7 +16,8 @@ export async function POST(request) {
   if(active) return Response.json({error:'A generation is already running.'},{status:409});
   active=true;
   const record={id:randomUUID(),runId,createdAt:new Date().toISOString(),status:'generating',model:'MiniMax H3',prompt:body.prompt || '',compiledPrompt:body.compiledPrompt || '',references:body.references || [],duration:body.duration,quality:body.quality,preset:body.preset || 'general',aspectRatio:body.aspectRatio || 'Auto',progress:0,phase:'Connecting to Wan2GP',eta:null};
-  try {await saveGeneration(record);} catch(e){active=false;return Response.json({error:'Could not save generation history. Check available disk space.'},{status:500});}
+  if(!acquireGeneration(record.id)){active=false;return Response.json({error:'Another local generation is running. Wait for it to finish.'},{status:409});}
+  try {await saveGeneration(record);} catch(e){releaseGeneration(record.id);active=false;return Response.json({error:'Could not save generation history. Check available disk space.'},{status:500});}
   let connected=true;
   const stream=new ReadableStream({
     start(controller) {
@@ -43,7 +45,7 @@ export async function POST(request) {
             persist();if(data.type!=='progress')log(data);send(data);
           },log);
         } catch(e) {const cancelled=e.name==='AbortError';Object.assign(record,{status:cancelled?'cancelled':'failed',phase:cancelled?'Cancelled':'Failed',eta:null,error:cancelled?'Cancelled by you.':e.message,completedAt:new Date().toISOString()});persist();log({error:e.stack});send({type:cancelled?'cancelled':'error',message:record.error});}
-        finally {control.finished=true;await Promise.all([writes,historyWrites]);activeTasks.delete(record.id);active=false;if(connected){connected=false;controller.close();}}
+        finally {control.finished=true;await Promise.all([writes,historyWrites]);activeTasks.delete(record.id);releaseGeneration(record.id);active=false;if(connected){connected=false;controller.close();}}
       })();
     },
     cancel(){connected=false;},
