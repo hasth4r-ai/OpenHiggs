@@ -69,6 +69,8 @@ export default function VideoStudio({ apiKey }) {
   const [showElementsMenu, setShowElementsMenu] = useState(false);
   const [showCompiledPrompt, setShowCompiledPrompt] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [generationStatus, setGenerationStatus] = useState('');
   const [generatedVideoUrl, setGeneratedVideoUrl] = useState(null);
 
   // Refs
@@ -212,6 +214,75 @@ export default function VideoStudio({ apiKey }) {
     duration: parseInt(duration) || 5,
     preset: activePreset.id,
   });
+
+  const handleGenerate = async () => {
+    if (!prompt.trim() && references.length === 0) {
+      alert('Please enter a prompt or attach reference images.');
+      return;
+    }
+
+    setIsGenerating(true);
+    setGenerationProgress(0);
+    setGenerationStatus('Connecting to Wan2GP engine...');
+    setGeneratedVideoUrl(null);
+
+    try {
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt,
+          compiledPrompt: compiledH3Prompt,
+          references,
+          duration: parseInt(duration) || 5,
+          quality,
+          steps: 8,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Generation request failed with status ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.type === 'progress') {
+                const pct = Math.round(data.pct * 100);
+                setGenerationProgress(pct);
+                setGenerationStatus(`Rendering: ${pct}% (Step ${data.step}/${data.total})`);
+              } else if (data.type === 'log') {
+                setGenerationStatus(data.message.slice(0, 70));
+              } else if (data.type === 'done') {
+                setGeneratedVideoUrl(data.videoUrl);
+                setGenerationStatus('Complete!');
+              } else if (data.type === 'error') {
+                alert(`Generation error: ${data.message}`);
+              }
+            } catch (e) {}
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[VideoStudio] Generation failed:', err);
+      alert(`Generation failed: ${err.message}`);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   return (
     <div className="h-full flex overflow-hidden bg-[#0a0a0a] text-white select-none">
@@ -609,15 +680,22 @@ export default function VideoStudio({ apiKey }) {
             <button
               type="button"
               disabled={isGenerating}
-              onClick={() => {
-                alert(`H3 Prompt Compiled:\n\n${compiledH3Prompt}\n\n(Local engine execution will connect to Wan2GP in the next phase).`);
-              }}
-              className="w-full bg-[#d9ff00] text-black font-black text-sm py-3.5 rounded-2xl hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
+              onClick={handleGenerate}
+              className="w-full bg-[#d9ff00] text-black font-black text-sm py-3.5 rounded-2xl hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 cursor-pointer"
             >
-              <span>Generate ✨</span>
-              <span className="text-[10px] font-mono bg-black/15 px-2 py-0.5 rounded-full">
-                2Q 10
-              </span>
+              {isGenerating ? (
+                <>
+                  <span className="animate-spin inline-block text-black">◌</span>
+                  <span className="truncate max-w-[240px]">{generationStatus || 'Rendering...'}</span>
+                </>
+              ) : (
+                <>
+                  <span>Generate ✨</span>
+                  <span className="text-[10px] font-mono bg-black/15 px-2 py-0.5 rounded-full">
+                    2Q 10
+                  </span>
+                </>
+              )}
             </button>
           </div>
 
@@ -730,8 +808,33 @@ export default function VideoStudio({ apiKey }) {
           {/* Card 3: GET VIDEO */}
           <div className="flex flex-col bg-[#111] border border-white/10 rounded-3xl p-6 shadow-xl">
             <div className="aspect-[4/3] rounded-2xl bg-[#161616] border border-white/10 flex flex-col items-center justify-center p-4 text-center relative overflow-hidden">
-              {generatedVideoUrl ? (
-                <video src={generatedVideoUrl} controls autoPlay loop className="w-full h-full object-cover rounded-xl" />
+              {isGenerating ? (
+                <div className="flex flex-col items-center justify-center gap-3 w-full p-4 animate-fade-in">
+                  <div className="w-12 h-12 rounded-full border-2 border-[#d9ff00]/30 border-t-[#d9ff00] animate-spin" />
+                  <span className="text-xs font-black text-[#d9ff00] font-mono">
+                    {generationStatus || 'Rendering on RTX 5070 Ti...'}
+                  </span>
+                  <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden mt-1">
+                    <div 
+                      className="bg-[#d9ff00] h-full transition-all duration-300"
+                      style={{ width: `${Math.max(8, generationProgress)}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] text-white/50">
+                    MiniMax H3 INT8 · 8 Steps · GPU Native
+                  </span>
+                </div>
+              ) : generatedVideoUrl ? (
+                <div className="w-full h-full flex flex-col items-center relative group">
+                  <video src={generatedVideoUrl} controls autoPlay loop className="w-full h-full object-cover rounded-xl shadow-2xl" />
+                  <a
+                    href={generatedVideoUrl}
+                    download="scarlet_witch_fight.mp4"
+                    className="absolute bottom-3 right-3 bg-[#d9ff00] text-black font-black text-xs px-3 py-1.5 rounded-lg shadow-lg hover:scale-105 transition-all flex items-center gap-1 opacity-90 group-hover:opacity-100"
+                  >
+                    ↓ Download Video
+                  </a>
+                </div>
               ) : (
                 <div className="flex flex-col items-center justify-center gap-2">
                   <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center text-xl text-white/60">
@@ -739,7 +842,7 @@ export default function VideoStudio({ apiKey }) {
                   </div>
                   <span className="text-xs font-bold text-white/70">Ready to Render</span>
                   <span className="text-[10px] text-white/40 max-w-[180px]">
-                    Your video will render here with full audio & motion sync.
+                    Click Generate to render with your local MiniMax H3 model.
                   </span>
                 </div>
               )}
