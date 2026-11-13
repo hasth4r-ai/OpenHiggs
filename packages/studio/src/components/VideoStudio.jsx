@@ -67,7 +67,7 @@ export default function VideoStudio({ apiKey }) {
   const [prompt, setPrompt] = useState('');
   const [duration, setDuration] = useState('5s');
   const [aspectRatio, setAspectRatio] = useState('Auto');
-  const [quality, setQuality] = useState('2K');
+  const [quality, setQuality] = useState('480p');
 
   // UI state
   const [showElementsMenu, setShowElementsMenu] = useState(false);
@@ -76,6 +76,16 @@ export default function VideoStudio({ apiKey }) {
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationStatus, setGenerationStatus] = useState('');
   const [generatedVideoUrl, setGeneratedVideoUrl] = useState(null);
+  const [generationError, setGenerationError] = useState('');
+  const [elapsed, setElapsed] = useState(0);
+  const [remaining, setRemaining] = useState(null);
+  useEffect(() => {
+    if (!isGenerating) return;
+    const started = Date.now();
+    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [isGenerating]);
+  const formatTime = (seconds) => `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
 
   // Refs
   const imageInputRef = useRef(null);
@@ -229,6 +239,9 @@ export default function VideoStudio({ apiKey }) {
     setGenerationProgress(0);
     setGenerationStatus('Connecting to Wan2GP engine...');
     setGeneratedVideoUrl(null);
+    setGenerationError('');
+    setElapsed(0);
+    setRemaining(null);
 
     try {
       const response = await fetch('/api/generate', {
@@ -240,17 +253,18 @@ export default function VideoStudio({ apiKey }) {
           references,
           duration: parseInt(duration) || 5,
           quality,
-          steps: 8,
         }),
       });
 
       if (!response.ok) {
-        throw new Error(`Generation request failed with status ${response.status}`);
+        const detail = await response.json().catch(() => ({}));
+        throw new Error(detail.error || `Generation request failed with status ${response.status}`);
       }
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let completed = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -262,27 +276,29 @@ export default function VideoStudio({ apiKey }) {
 
         for (const line of lines) {
           if (line.startsWith('data: ')) {
-            try {
               const data = JSON.parse(line.slice(6));
               if (data.type === 'progress') {
-                const pct = Math.round(data.pct * 100);
+                const pct = Math.max(0, Math.min(100, Math.round(data.pct)));
                 setGenerationProgress(pct);
-                setGenerationStatus(`Rendering: ${pct}% (Step ${data.step}/${data.total})`);
-              } else if (data.type === 'log') {
-                setGenerationStatus(data.message.slice(0, 70));
+                setGenerationStatus(`${data.phase || 'Rendering'}${data.total ? ` (${data.step}/${data.total})` : ''}`);
+                setRemaining(Number.isFinite(data.eta) ? data.eta : null);
+              } else if (data.type === 'start') {
+                setGenerationStatus(data.message);
               } else if (data.type === 'done') {
+                completed = true;
+                setGenerationProgress(100);
                 setGeneratedVideoUrl(data.videoUrl);
                 setGenerationStatus('Complete!');
               } else if (data.type === 'error') {
-                alert(`Generation error: ${data.message}`);
+                throw new Error(data.message);
               }
-            } catch (e) {}
           }
         }
       }
+      if (!completed) throw new Error('Connection ended before generation completed. Check Wan2GP before retrying.');
     } catch (err) {
       console.error('[VideoStudio] Generation failed:', err);
-      alert(`Generation failed: ${err.message}`);
+      setGenerationError(err.message);
     } finally {
       setIsGenerating(false);
     }
@@ -665,7 +681,7 @@ export default function VideoStudio({ apiKey }) {
             <div className="flex items-center justify-between bg-[#141414] p-2.5 rounded-xl border border-white/10">
               <span className="text-xs font-bold text-white/50 uppercase">Quality</span>
               <div className="flex items-center gap-1">
-                {['720p', '1080p', '2K'].map(q => (
+                {['480p', '720p', '1080p'].map(q => (
                   <button
                     key={q}
                     type="button"
@@ -701,11 +717,13 @@ export default function VideoStudio({ apiKey }) {
                   <span>Generate</span>
                   <SparkleIcon className="w-4 h-4 text-black" />
                   <span className="text-[10px] font-mono bg-black/15 px-2 py-0.5 rounded-full ml-1">
-                    2Q 10
+                    Local
                   </span>
                 </>
               )}
             </button>
+            {isGenerating && <p className="text-xs text-white/60 mt-2" aria-live="polite">Elapsed: {formatTime(elapsed)} · {remaining === null ? 'Estimating remaining time…' : `About ${formatTime(remaining)} left in this sampling pass`}</p>}
+            {generationError && <p role="alert" className="text-xs text-red-400 mt-2 whitespace-normal">{generationError}</p>}
           </div>
 
         </div>
@@ -828,7 +846,7 @@ export default function VideoStudio({ apiKey }) {
                   <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden mt-1">
                     <div 
                       className="bg-[#d9ff00] h-full transition-all duration-300"
-                      style={{ width: `${Math.max(8, generationProgress)}%` }}
+                      style={{ width: `${generationProgress}%` }}
                     />
                   </div>
                   <span className="text-[10px] text-white/50 font-mono">
