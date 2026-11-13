@@ -1,0 +1,57 @@
+OPENHIGGS - LOCAL HOSTING
+
+Installation folder: C:\openhiggs
+Repository: C:\openhiggs\repo
+Git branch: local/setup
+Local URL: http://127.0.0.1:3000
+
+DAILY USE
+Double-click Start OpenHiggs.cmd to start the server and open the browser.
+Double-click Stop OpenHiggs.cmd to stop only this app's tracked Node process.
+Closing the browser does not stop the server. Windows startup is not configured.
+Double-click Build OpenHiggs.cmd only after making reviewed source changes,
+with the app stopped. It does not download Git updates or npm dependencies.
+
+RUNTIME AND DEPENDENCIES
+Portable Node.js is in runtime; its exact version and checksum are in
+config\runtime.json. npm dependencies are in repo\node_modules and the
+production build is in repo\.next. npm's cache is in temp\npm-cache.
+The downloaded Node ZIP was verified against the official SHA-256 manifest.
+No XAMPP, Apache, MySQL, Windows service, system PATH change, or Pinokio
+runtime is required. Next.js telemetry is disabled by the launch scripts.
+The unused Electron binary was not downloaded; this is the browser version.
+
+NETWORK AND CURRENT SCOPE
+The web server listens only on 127.0.0.1. Other devices cannot access it.
+This is the repository's original cloud-backed app, hosted locally.
+The original API-key screen and cloud generation code remain present.
+Local generation, H3 prompting improvements, and local LoRA integration
+are not implemented. No API key was supplied and no generation was run.
+
+STORAGE
+The original app still uses browser localStorage where implemented.
+There is no new database. data\uploads, data\generations, data\projects,
+and data\database are reserved for the later local integration; the
+original app does not automatically save into those folders yet.
+Browser downloads follow your browser's download settings.
+Keep using the same browser profile and URL to retain the same localStorage.
+
+FOLDERS
+repo       - GitHub code and installed dependencies/build output
+runtime    - Dedicated portable Node.js and npm
+config     - Server port, runtime information, and temporary process state
+scripts    - Start, Stop, and Build PowerShell scripts
+logs       - Install/build/server logs (server logs reset on each start)
+temp       - Downloads, dependency cache, and temporary files
+data       - Reserved local user-data folders
+backups    - Baseline source bundle and later backups
+
+UPDATES
+Updates are manual. No scheduled updater exists.
+Work on the local/setup branch and commit reviewed changes.
+Use git fetch origin to inspect incoming changes; do not blindly pull.
+Before merging changes, stop the app, save a commit, and back up any user
+data/configuration. Test and rebuild before returning to normal use.
+backups\local-setup.bundle preserves the initial working source history;
+it does not contain node_modules, the Node runtime, browser storage, or media.
+The canonical copies of these setup scripts are in repo\local-hosting.
