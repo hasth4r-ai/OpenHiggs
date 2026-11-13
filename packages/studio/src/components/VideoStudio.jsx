@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { generateVideo, generateI2V, uploadFile, LOCAL_ENGINE_CONNECTED, LOCAL_UPLOADS_ENABLED } from '../local.js';
+import GenerationHistory from './GenerationHistory.jsx';
 import { compileH3Prompt } from '../h3Compiler.js';
 import { 
   ImageIcon, VideoCameraIcon, MicrophoneIcon, SparkleIcon, EditPencilIcon,
@@ -75,7 +76,7 @@ export default function VideoStudio({ apiKey }) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationStatus, setGenerationStatus] = useState('');
-  const [generatedVideoUrl, setGeneratedVideoUrl] = useState(null);
+  const [historyVersion, setHistoryVersion] = useState(0);
   const [generationError, setGenerationError] = useState('');
   const [elapsed, setElapsed] = useState(0);
   const [remaining, setRemaining] = useState(null);
@@ -238,7 +239,7 @@ export default function VideoStudio({ apiKey }) {
     setIsGenerating(true);
     setGenerationProgress(0);
     setGenerationStatus('Connecting to Wan2GP engine...');
-    setGeneratedVideoUrl(null);
+    setHistoryVersion(v => v + 1);
     setGenerationError('');
     setElapsed(0);
     setRemaining(null);
@@ -253,6 +254,8 @@ export default function VideoStudio({ apiKey }) {
           references,
           duration: parseInt(duration) || 5,
           quality,
+          preset: activePreset.id,
+          aspectRatio,
         }),
       });
 
@@ -287,7 +290,7 @@ export default function VideoStudio({ apiKey }) {
               } else if (data.type === 'done') {
                 completed = true;
                 setGenerationProgress(100);
-                setGeneratedVideoUrl(data.videoUrl);
+                setHistoryVersion(v => v + 1);
                 setGenerationStatus('Complete!');
               } else if (data.type === 'error') {
                 throw new Error(data.message);
@@ -301,6 +304,7 @@ export default function VideoStudio({ apiKey }) {
       setGenerationError(err.message);
     } finally {
       setIsGenerating(false);
+      setHistoryVersion(v => v + 1);
     }
   };
 
@@ -729,167 +733,15 @@ export default function VideoStudio({ apiKey }) {
         </div>
       </aside>
 
-      {/* ──────────────────────────────────────────────────────────────────────────
-          MAIN CENTER STAGE: HIGGSFIELD STUDIO WORKFLOW CANVAS
-          ────────────────────────────────────────────────────────────────────────── */}
-      <main className="flex-1 flex flex-col h-full overflow-y-auto custom-scrollbar p-6 md:p-10">
-        
-        {/* Top Navbar */}
-        <div className="flex items-center justify-between pb-6 border-b border-white/5">
-          <div className="flex items-center gap-3">
-            <button className="text-xs font-bold text-white/70 hover:text-white flex items-center gap-1.5 px-3 py-1.5 bg-white/5 rounded-xl border border-white/10 transition-colors">
-              <HistoryClockIcon className="w-3.5 h-3.5 text-[#d9ff00]" />
-              <span>History</span>
-            </button>
-            <button className="text-xs font-bold text-white/50 hover:text-white flex items-center gap-1.5 px-3 py-1.5 transition-colors">
-              <BookInfoIcon className="w-3.5 h-3.5 text-white/50" />
-              <span>How it works</span>
-            </button>
-          </div>
-          <span className="text-xs text-white/40 font-mono">Local Wan2GP MiniMax H3</span>
-        </div>
-
-        {/* Hero Section: MAKE VIDEOS IN ONE CLICK */}
-        <div className="pt-6 pb-8">
-          <h1 className="text-2xl md:text-4xl font-black text-white tracking-tight uppercase">
-            Make Videos In One Click
-          </h1>
-          <p className="text-sm md:text-base text-white/50 mt-1.5 max-w-2xl font-medium">
-            250+ presets for camera control, framing, and high-quality VFX — or use the general preset for manual control.
-          </p>
-        </div>
-
-        {/* 3-Step Interactive Visual Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
-          
-          {/* Card 1: ADD IMAGE */}
-          <div 
-            onClick={() => imageInputRef.current?.click()}
-            className="flex flex-col bg-[#111] border border-white/10 hover:border-[#d9ff00]/60 rounded-3xl p-6 transition-all group cursor-pointer shadow-xl relative overflow-hidden"
-          >
-            <div className="aspect-[4/3] rounded-2xl border-2 border-dashed border-white/15 group-hover:border-[#d9ff00]/60 flex flex-col items-center justify-center gap-3 bg-[#161616] transition-colors relative overflow-hidden">
-              {references.find(r => r.type === 'image') ? (
-                <img 
-                  src={references.find(r => r.type === 'image')?.url} 
-                  alt="" 
-                  className="w-full h-full object-cover rounded-2xl" 
-                />
-              ) : (
-                <>
-                  <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-white/80 group-hover:scale-110 transition-transform">
-                    <ImageIcon className="w-6 h-6 text-[#d9ff00]" />
-                  </div>
-                  <div className="text-center">
-                    <span className="text-xs font-black text-white uppercase tracking-wider block">
-                      Upload Image
-                    </span>
-                    <span className="text-[10px] text-[#d9ff00] block mt-1 font-mono">
-                      Paste from Clipboard
-                    </span>
-                  </div>
-                </>
-              )}
-            </div>
-            <div className="mt-4">
-              <span className="text-xs font-black text-white uppercase tracking-wider block">
-                1. Add Image
-              </span>
-              <span className="text-[11px] text-white/50 mt-1 block">
-                Upload or generate an image to start your animation
-              </span>
-            </div>
-          </div>
-
-          {/* Card 2: CHOOSE PRESET */}
-          <div className="flex flex-col bg-[#111] border border-white/10 rounded-3xl p-6 shadow-xl">
-            <div className="aspect-[4/3] rounded-2xl bg-[#161616] border border-white/10 p-3 flex flex-col gap-2 overflow-y-auto custom-scrollbar">
-              {CAMERA_PRESETS.map(p => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setActivePreset(p)}
-                  className={`flex items-center gap-3 p-2.5 rounded-xl text-left transition-all ${
-                    activePreset.id === p.id
-                      ? 'bg-[#d9ff00] text-black font-black shadow-md'
-                      : 'hover:bg-white/5 text-white/80'
-                  }`}
-                >
-                  <div className="flex-shrink-0">{p.icon}</div>
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-xs font-bold leading-tight">{p.name}</span>
-                    <span className={`text-[10px] truncate ${activePreset.id === p.id ? 'text-black/70' : 'text-white/40'}`}>
-                      {p.description}
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
-            <div className="mt-4">
-              <span className="text-xs font-black text-white uppercase tracking-wider block">
-                2. Choose Preset
-              </span>
-              <span className="text-[11px] text-white/50 mt-1 block">
-                Pick a preset to control your camera and image movement
-              </span>
-            </div>
-          </div>
-
-          {/* Card 3: GET VIDEO */}
-          <div className="flex flex-col bg-[#111] border border-white/10 rounded-3xl p-6 shadow-xl">
-            <div className="aspect-[4/3] rounded-2xl bg-[#161616] border border-white/10 flex flex-col items-center justify-center p-4 text-center relative overflow-hidden">
-              {isGenerating ? (
-                <div className="flex flex-col items-center justify-center gap-3 w-full p-4 animate-fade-in">
-                  <div className="w-12 h-12 rounded-full border-2 border-[#d9ff00]/30 border-t-[#d9ff00] animate-spin" />
-                  <span className="text-xs font-black text-[#d9ff00] font-mono">
-                    {generationStatus || 'Rendering on RTX 5070 Ti...'}
-                  </span>
-                  <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden mt-1">
-                    <div 
-                      className="bg-[#d9ff00] h-full transition-all duration-300"
-                      style={{ width: `${generationProgress}%` }}
-                    />
-                  </div>
-                  <span className="text-[10px] text-white/50 font-mono">
-                    MiniMax H3 INT8 · 8 Steps · GPU Native
-                  </span>
-                </div>
-              ) : generatedVideoUrl ? (
-                <div className="w-full h-full flex flex-col items-center relative group">
-                  <video src={generatedVideoUrl} controls autoPlay loop className="w-full h-full object-cover rounded-xl shadow-2xl" />
-                  <a
-                    href={generatedVideoUrl}
-                    download="openhiggs_output.mp4"
-                    className="absolute bottom-3 right-3 bg-[#d9ff00] text-black font-black text-xs px-3 py-1.5 rounded-lg shadow-lg hover:scale-105 transition-all flex items-center gap-1.5 opacity-90 group-hover:opacity-100"
-                  >
-                    <DownloadIcon className="w-3.5 h-3.5 text-black" />
-                    <span>Download</span>
-                  </a>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center gap-2">
-                  <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center text-white/60">
-                    <ClapperboardIcon className="w-6 h-6 text-white/40" />
-                  </div>
-                  <span className="text-xs font-bold text-white/70">Ready to Render</span>
-                  <span className="text-[10px] text-white/40 max-w-[180px]">
-                    Click Generate to render with your local MiniMax H3 model.
-                  </span>
-                </div>
-              )}
-            </div>
-            <div className="mt-4">
-              <span className="text-xs font-black text-white uppercase tracking-wider block">
-                3. Get Video
-              </span>
-              <span className="text-[11px] text-white/50 mt-1 block">
-                Click generate to create your final animated video!
-              </span>
-            </div>
-          </div>
-
-        </div>
-
-      </main>
+      <GenerationHistory refreshKey={historyVersion} disabled={isGenerating} onReuse={item => {
+        setPrompt(item.prompt || '');
+        if (Number(item.duration) > 0) setDuration((Number(item.duration) > 7.5 ? 10 : 5) + 's');
+        if (['480p', '720p', '1080p'].includes(item.quality)) setQuality(item.quality);
+        setReferences(item.references || []);
+        setActivePreset(CAMERA_PRESETS.find(p => p.id === item.preset) || CAMERA_PRESETS[0]);
+        if (item.aspectRatio) setAspectRatio(item.aspectRatio);
+        textareaRef.current?.focus();
+      }} />
 
       {/* Preset Modal */}
       {showPresetModal && (

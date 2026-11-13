@@ -13,3 +13,8 @@ OpenHiggs shows the current engine phase, progress, elapsed time, and a measured
 Original output remains in Wan2GP's configured output folder. A browser-compatible H.264/AAC MP4 copy is saved in `C:\openhiggs\data\generations`. Request/error logs are saved as `C:\openhiggs\logs\generation_*.jsonl`. The previous `scripts\wan_generate.py` is no longer called.
 
 Implementation uses Gradio's queue protocol with state placeholders and trigger IDs from `/config`. Fetches must opt out of both Next.js caching and request deduplication, including an explicit AbortSignal, to avoid a stalled SSE reader on a cloned stream.
+
+## Generation history
+The video workspace opens directly to persistent History, with List, Grid and Masonry views, prompt search, status filters, video playback, details, prompt copying, settings reuse, and downloads. Records live in data\database\generation-history as individual JSON files. New requests save prompts, references, exposed settings, status and progress. Jobs interrupted by an OpenHiggs restart remain visible with a warning to check Wan2GP. Older videos can recover embedded model prompts, but missing original reference lists must be attached again.
+
+Design references: https://higgsfield.ai/ai/video (History/View controls) and https://higgsfield.ai/creator-hub/help-center/getting-started/whats-in-my-higgsfield-account (asset details, copy, reuse and download).
