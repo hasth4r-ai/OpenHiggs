@@ -4,7 +4,16 @@ import {randomUUID} from 'node:crypto';
 import {call,zipFiles} from './wan-client.mjs';
 import {uploadedPath,probeVideo,validatePair,normalizeMask,compositeProRes,makePreview,PRORES} from './inpaint-media.mjs';
 import {inpaintSettings} from './inpaint-settings.mjs';
-const request=(url,options={})=>fetch(url,{...options,cache:'no-store',signal:options.signal||new AbortController().signal});
+// CPU preparation can outlive Gradio's keep-alive timeout. Use fresh connections
+// and retry only read-only probes, never task submissions.
+const request=async(url,options={})=>{
+  for(let attempt=0;;attempt++)try{
+    return await fetch(url,{...options,headers:{...options.headers,Connection:'close'},cache:'no-store',signal:options.signal||new AbortController().signal});
+  }catch(error){
+    if((options.method||'GET')==='GET'&&attempt===0&&['ECONNRESET','UND_ERR_SOCKET','EPIPE'].includes(error.cause?.code))continue;
+    throw new Error('Wan2GP '+new URL(url).pathname+': '+(error.cause?.message||error.message),{cause:error});
+  }
+};
 export async function runInpaint({base,wanRoot,uploadsDir,outputDir,ffmpeg,body,control},send,log) {
   const session=randomUUID(),tag=`inpaint_${session}`,check=()=>{if(control.requested)throw Object.assign(new Error('Cancelled by you.'),{name:'AbortError'});};
   const snapshot=async()=>{const r=await request(`${base}/deepy/deepy_api/state`);if(!r.ok)throw new Error('Wan2GP is not reachable.');return r.json();};
