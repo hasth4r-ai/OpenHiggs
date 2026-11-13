@@ -21,7 +21,7 @@ module.exports = {
                 muted: '#52525b',
             },
             fontFamily: {
-                sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+                sans: ['Google Sans'], mono: ['Google Sans'], serif: ['Google Sans'],
             },
             borderRadius: {
                 'xl': '1rem',

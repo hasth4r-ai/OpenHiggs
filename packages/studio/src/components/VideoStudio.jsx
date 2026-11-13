@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { generateVideo, generateI2V, uploadFile, LOCAL_ENGINE_CONNECTED, LOCAL_UPLOADS_ENABLED } from '../local.js';
+import VideoWorkflowTabs from './VideoWorkflowTabs.jsx';
 import GenerationHistory from './GenerationHistory.jsx';
 import InpaintStudio from './InpaintStudio.jsx';
 import { compileH3Prompt } from '../h3Compiler.js';
@@ -216,13 +217,14 @@ export default function VideoStudio({ apiKey }) {
   // Clipboard paste listener (<kbd>Ctrl</kbd> + <kbd>V</kbd>)
   useEffect(() => {
     const handlePaste = (e) => {
+      if (subTab === 'edit') return;
       if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length > 0) {
         handleUploadFiles(e.clipboardData.files);
       }
     };
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
-  }, [references]);
+  }, [references, subTab]);
 
   // Compile H3 prompt live
   const compiledH3Prompt = compileH3Prompt({
@@ -314,35 +316,22 @@ export default function VideoStudio({ apiKey }) {
     }
   };
 
-  if(subTab==='edit')return <InpaintStudio onBack={()=>setSubTab('create')} initialDraft={inpaintDraft} blocked={isGenerating}/>;
+
   return (
-    <div className="h-full flex overflow-hidden bg-[#0a0a0a] text-white select-none">
+    <div className="relative h-full overflow-hidden bg-[#0a0a0a]">
+      <div className="studio-tab-panel" data-active={subTab==='edit'} aria-hidden={subTab!=='edit'} inert={subTab!=='edit'}>
+        <InpaintStudio onNavigate={setSubTab} initialDraft={inpaintDraft} blocked={isGenerating}/>
+      </div>
+      <div className="studio-tab-panel" data-active={subTab!=='edit'} aria-hidden={subTab==='edit'} inert={subTab==='edit'}>
+      <div className="h-full flex overflow-hidden bg-[#0a0a0a] text-white select-none">
       
       {/* ──────────────────────────────────────────────────────────────────────────
           LEFT SIDEBAR: HIGGSFIELD STUDIO CONTROLS
           ────────────────────────────────────────────────────────────────────────── */}
-      <aside className="w-[370px] flex-shrink-0 bg-[#0e0e0e] border-r border-white/10 flex flex-col h-full overflow-y-auto custom-scrollbar">
+      <aside className="studio-sidebar flex-shrink-0 bg-[#0e0e0e] border-r border-white/10 flex flex-col h-full overflow-y-auto custom-scrollbar">
         
         {/* Sub-tabs: Create Video | Edit Video | Motion Control */}
-        <div className="flex items-center gap-1 p-3 border-b border-white/5 bg-[#121212]">
-          {[
-            { id: 'create', label: 'Create Video' },
-            { id: 'edit', label: 'Edit Video' },
-            { id: 'motion', label: 'Motion Control' },
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setSubTab(tab.id)}
-              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                subTab === tab.id
-                  ? 'bg-white/15 text-white shadow-sm'
-                  : 'text-white/50 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <VideoWorkflowTabs active={subTab} onChange={setSubTab}/>
 
         <div className="p-4 flex flex-col gap-4 flex-1">
 
@@ -793,6 +782,8 @@ export default function VideoStudio({ apiKey }) {
         </div>
       )}
 
+    </div>
+      </div>
     </div>
   );
 }

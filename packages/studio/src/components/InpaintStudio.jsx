@@ -1,8 +1,9 @@
 'use client';
 import {useState,useEffect} from 'react';
+import VideoWorkflowTabs from './VideoWorkflowTabs.jsx';
 import GenerationHistory from './GenerationHistory.jsx';
 const defaults={mode:'remove',source:'',mask:'',reference:'',prompt:'',profile:'422hq',denoise:1,expand:0,feather:2,invert:false,keepAudio:true};
-export default function InpaintStudio({onBack,initialDraft,blocked=false}) {
+export default function InpaintStudio({onNavigate,initialDraft,blocked=false}) {
   const [form,setForm]=useState({...defaults,...initialDraft}),[names,setNames]=useState({}),[info,setInfo]=useState(null);
   const [uploading,setUploading]=useState(''),[error,setError]=useState(''),[status,setStatus]=useState(''),[generating,setGenerating]=useState(false),[busy,setBusy]=useState(false),[refresh,setRefresh]=useState(0);
   const update=(key,value)=>setForm(old=>({...old,[key]:value}));
@@ -39,8 +40,8 @@ export default function InpaintStudio({onBack,initialDraft,blocked=false}) {
     {key==='reference'&&form.reference&&<img src={form.reference} alt="Inpaint reference" className="mt-3 w-full max-h-32 object-contain rounded"/>}
   </div>;
   return <div className="flex h-full min-h-0 bg-[#0a0a0a] text-white">
-    <aside className="w-[370px] shrink-0 border-r border-white/10 overflow-y-auto custom-scrollbar bg-[#0e0e0e]">
-      <nav className="flex gap-2 p-3 border-b border-white/10 text-xs"><button onClick={onBack} className="px-3 py-2 text-white/50 hover:text-white">Create Video</button><span className="px-3 py-2 bg-white/10 rounded-lg font-semibold">Edit Video</span></nav>
+    <aside className="studio-sidebar shrink-0 border-r border-white/10 overflow-y-auto custom-scrollbar bg-[#0e0e0e]">
+      <VideoWorkflowTabs active="edit" onChange={onNavigate}/>
       <div className="p-4 space-y-4">
         <div><h1 className="text-base font-semibold">Video Inpaint</h1><p className="text-xs text-white/40 mt-1">MiniMax H3 · masked footage editing</p></div>
         <div className="grid grid-cols-2 bg-white/5 rounded-lg p-1 gap-1">{[['remove','Remove / Clean plate'],['replace','Replace object']].map(([value,label])=><button key={value} disabled={generating} aria-pressed={form.mode===value} onClick={()=>update('mode',value)} className={`text-xs py-2 rounded-md ${form.mode===value?'bg-[#d9ff00] text-black font-semibold':'text-white/50'}`}>{label}</button>)}</div>
