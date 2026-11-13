@@ -3,6 +3,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { generateVideo, generateI2V, uploadFile, LOCAL_ENGINE_CONNECTED, LOCAL_UPLOADS_ENABLED } from '../local.js';
 import { compileH3Prompt } from '../h3Compiler.js';
+import { 
+  ImageIcon, VideoCameraIcon, MicrophoneIcon, SparkleIcon, EditPencilIcon,
+  LayersIcon, FilmFrameIcon, HistoryClockIcon, BookInfoIcon, TrackingIcon,
+  ZoomInIcon, OrbitIcon, DroneIcon, ClapperboardIcon, DownloadIcon, CloseIcon
+} from './icons.jsx';
 
 // Camera & VFX Presets for MiniMax H3
 const CAMERA_PRESETS = [
@@ -11,36 +16,35 @@ const CAMERA_PRESETS = [
     name: 'GENERAL',
     subtitle: 'MiniMax H3',
     description: 'Manual creative control with natural references & prompts.',
-    icon: '🎬',
-    thumb: '/api/media/preset_general.jpg',
+    icon: <ClapperboardIcon className="w-5 h-5 text-[#d9ff00]" />,
   },
   {
     id: 'tracking',
     name: 'TRACKING',
     subtitle: 'Camera Move',
     description: 'Smooth low-angle tracking shot following the subject.',
-    icon: '🏃',
+    icon: <TrackingIcon className="w-5 h-5 text-[#d9ff00]" />,
   },
   {
     id: 'push_in',
     name: 'PUSH IN',
     subtitle: 'Dramatic Focus',
     description: 'Slow, cinematic zoom in toward the character.',
-    icon: '🔍',
+    icon: <ZoomInIcon className="w-5 h-5 text-[#d9ff00]" />,
   },
   {
     id: 'orbit',
     name: 'ORBIT',
     subtitle: '360° Arc',
     description: 'Controlled semicircular camera orbit around the focal point.',
-    icon: '🔄',
+    icon: <OrbitIcon className="w-5 h-5 text-[#d9ff00]" />,
   },
   {
     id: 'drone',
     name: 'DRONE / AERIAL',
     subtitle: 'Landscape Sweep',
     description: 'Expansive forward gliding sweep across the environment.',
-    icon: '🚁',
+    icon: <DroneIcon className="w-5 h-5 text-[#d9ff00]" />,
   },
 ];
 
@@ -318,7 +322,7 @@ export default function VideoStudio({ apiKey }) {
           {/* Model / Preset Banner */}
           <div className="relative rounded-2xl bg-[#161616] border border-white/10 p-3.5 flex items-center justify-between group overflow-hidden">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-[#222] border border-white/10 flex items-center justify-center text-xl overflow-hidden shadow-inner">
+              <div className="w-12 h-12 rounded-xl bg-[#222] border border-white/10 flex items-center justify-center overflow-hidden shadow-inner">
                 {activePreset.icon}
               </div>
               <div className="flex flex-col">
@@ -333,9 +337,10 @@ export default function VideoStudio({ apiKey }) {
             <button
               type="button"
               onClick={() => setShowPresetModal(true)}
-              className="text-xs font-semibold text-white/70 hover:text-white bg-white/10 hover:bg-white/20 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 border border-white/5"
+              className="text-xs font-semibold text-white/70 hover:text-white bg-white/10 hover:bg-white/20 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 border border-white/5 cursor-pointer"
             >
-              <span>✏ Change</span>
+              <EditPencilIcon className="w-3.5 h-3.5 text-[#d9ff00]" />
+              <span>Change</span>
             </button>
           </div>
 
@@ -350,7 +355,8 @@ export default function VideoStudio({ apiKey }) {
                   : 'text-white/50 hover:text-white'
               }`}
             >
-              <span>🗂 References</span>
+              <LayersIcon className="w-3.5 h-3.5 text-[#d9ff00]" />
+              <span>References</span>
             </button>
             <button
               type="button"
@@ -361,7 +367,8 @@ export default function VideoStudio({ apiKey }) {
                   : 'text-white/50 hover:text-white'
               }`}
             >
-              <span>🖼 Frames</span>
+              <FilmFrameIcon className="w-3.5 h-3.5 text-white/50" />
+              <span>Frames</span>
             </button>
           </div>
 
@@ -415,27 +422,27 @@ export default function VideoStudio({ apiKey }) {
             />
 
             {/* Three Circular Icons: Image, Video, Audio */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
               <div 
                 title="Add Image Reference"
                 onClick={(e) => { e.stopPropagation(); imageInputRef.current?.click(); }}
-                className="w-8 h-8 rounded-full bg-white/10 hover:bg-[#d9ff00] hover:text-black transition-all flex items-center justify-center text-xs"
+                className="w-9 h-9 rounded-full bg-white/10 hover:bg-[#d9ff00] hover:text-black transition-all flex items-center justify-center text-white/80"
               >
-                🖼
+                <ImageIcon className="w-4 h-4" />
               </div>
               <div 
                 title="Add Video Reference"
                 onClick={(e) => { e.stopPropagation(); videoInputRef.current?.click(); }}
-                className="w-8 h-8 rounded-full bg-white/10 hover:bg-[#d9ff00] hover:text-black transition-all flex items-center justify-center text-xs"
+                className="w-9 h-9 rounded-full bg-white/10 hover:bg-[#d9ff00] hover:text-black transition-all flex items-center justify-center text-white/80"
               >
-                🎥
+                <VideoCameraIcon className="w-4 h-4" />
               </div>
               <div 
                 title="Add Audio Reference"
                 onClick={(e) => { e.stopPropagation(); audioInputRef.current?.click(); }}
-                className="w-8 h-8 rounded-full bg-white/10 hover:bg-[#d9ff00] hover:text-black transition-all flex items-center justify-center text-xs"
+                className="w-9 h-9 rounded-full bg-white/10 hover:bg-[#d9ff00] hover:text-black transition-all flex items-center justify-center text-white/80"
               >
-                🎙
+                <MicrophoneIcon className="w-4 h-4" />
               </div>
             </div>
 
@@ -446,7 +453,7 @@ export default function VideoStudio({ apiKey }) {
               <span className="text-[10px] text-white/50 block mt-0.5">
                 Up to 9 images, 3 videos, and 3 audio files
               </span>
-              <span className="text-[9px] text-[#d9ff00]/70 font-mono block mt-1">
+              <span className="text-[9px] text-[#d9ff00]/80 font-mono block mt-1">
                 Drop files here or Paste from Clipboard (<kbd>Ctrl+V</kbd>)
               </span>
             </div>
@@ -470,11 +477,11 @@ export default function VideoStudio({ apiKey }) {
                     className="flex items-center justify-between gap-2 bg-[#1a1a1a] p-1.5 rounded-xl border border-white/5 hover:border-white/15 transition-all"
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-8 h-8 rounded-lg overflow-hidden bg-black/60 flex-shrink-0 border border-white/10">
+                      <div className="w-8 h-8 rounded-lg overflow-hidden bg-black/60 flex-shrink-0 border border-white/10 flex items-center justify-center">
                         {ref.type === 'video' ? (
                           <video src={ref.url} className="w-full h-full object-cover" muted />
                         ) : ref.type === 'audio' ? (
-                          <div className="w-full h-full flex items-center justify-center text-xs">🎵</div>
+                          <MicrophoneIcon className="w-4 h-4 text-[#d9ff00]" />
                         ) : (
                           <img src={ref.url} alt="" className="w-full h-full object-cover" />
                         )}
@@ -519,10 +526,10 @@ export default function VideoStudio({ apiKey }) {
                       <button
                         type="button"
                         onClick={() => removeReference(ref.id)}
-                        className="text-white/40 hover:text-red-400 text-xs px-1"
+                        className="text-white/40 hover:text-red-400 p-1 transition-colors"
                         title="Remove"
                       >
-                        ✕
+                        <CloseIcon className="w-3 h-3" />
                       </button>
                     </div>
                   </div>
@@ -619,8 +626,9 @@ export default function VideoStudio({ apiKey }) {
             {/* Model Row */}
             <div className="flex items-center justify-between bg-[#141414] p-2.5 rounded-xl border border-white/10">
               <span className="text-xs font-bold text-white/60">Model</span>
-              <span className="text-xs font-black text-[#d9ff00] flex items-center gap-1">
-                MiniMax H3 <span className="text-[10px]">✨</span>
+              <span className="text-xs font-black text-[#d9ff00] flex items-center gap-1.5">
+                <span>MiniMax H3</span>
+                <SparkleIcon className="w-3.5 h-3.5 text-[#d9ff00]" />
               </span>
             </div>
 
@@ -690,8 +698,9 @@ export default function VideoStudio({ apiKey }) {
                 </>
               ) : (
                 <>
-                  <span>Generate ✨</span>
-                  <span className="text-[10px] font-mono bg-black/15 px-2 py-0.5 rounded-full">
+                  <span>Generate</span>
+                  <SparkleIcon className="w-4 h-4 text-black" />
+                  <span className="text-[10px] font-mono bg-black/15 px-2 py-0.5 rounded-full ml-1">
                     2Q 10
                   </span>
                 </>
@@ -710,11 +719,13 @@ export default function VideoStudio({ apiKey }) {
         {/* Top Navbar */}
         <div className="flex items-center justify-between pb-6 border-b border-white/5">
           <div className="flex items-center gap-3">
-            <button className="text-xs font-bold text-white/70 hover:text-white flex items-center gap-1.5 px-3 py-1.5 bg-white/5 rounded-xl border border-white/10">
-              📁 History
+            <button className="text-xs font-bold text-white/70 hover:text-white flex items-center gap-1.5 px-3 py-1.5 bg-white/5 rounded-xl border border-white/10 transition-colors">
+              <HistoryClockIcon className="w-3.5 h-3.5 text-[#d9ff00]" />
+              <span>History</span>
             </button>
-            <button className="text-xs font-bold text-white/50 hover:text-white flex items-center gap-1.5 px-3 py-1.5">
-              📖 How it works
+            <button className="text-xs font-bold text-white/50 hover:text-white flex items-center gap-1.5 px-3 py-1.5 transition-colors">
+              <BookInfoIcon className="w-3.5 h-3.5 text-white/50" />
+              <span>How it works</span>
             </button>
           </div>
           <span className="text-xs text-white/40 font-mono">Local Wan2GP MiniMax H3</span>
@@ -747,14 +758,14 @@ export default function VideoStudio({ apiKey }) {
                 />
               ) : (
                 <>
-                  <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-xl text-white/80 group-hover:scale-110 transition-transform">
-                    🖼
+                  <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-white/80 group-hover:scale-110 transition-transform">
+                    <ImageIcon className="w-6 h-6 text-[#d9ff00]" />
                   </div>
                   <div className="text-center">
                     <span className="text-xs font-black text-white uppercase tracking-wider block">
                       Upload Image
                     </span>
-                    <span className="text-[10px] text-[#d9ff00] block mt-1">
+                    <span className="text-[10px] text-[#d9ff00] block mt-1 font-mono">
                       Paste from Clipboard
                     </span>
                   </div>
@@ -781,11 +792,11 @@ export default function VideoStudio({ apiKey }) {
                   onClick={() => setActivePreset(p)}
                   className={`flex items-center gap-3 p-2.5 rounded-xl text-left transition-all ${
                     activePreset.id === p.id
-                      ? 'bg-[#d9ff00] text-black font-black'
+                      ? 'bg-[#d9ff00] text-black font-black shadow-md'
                       : 'hover:bg-white/5 text-white/80'
                   }`}
                 >
-                  <span className="text-lg">{p.icon}</span>
+                  <div className="flex-shrink-0">{p.icon}</div>
                   <div className="flex flex-col min-w-0">
                     <span className="text-xs font-bold leading-tight">{p.name}</span>
                     <span className={`text-[10px] truncate ${activePreset.id === p.id ? 'text-black/70' : 'text-white/40'}`}>
@@ -820,7 +831,7 @@ export default function VideoStudio({ apiKey }) {
                       style={{ width: `${Math.max(8, generationProgress)}%` }}
                     />
                   </div>
-                  <span className="text-[10px] text-white/50">
+                  <span className="text-[10px] text-white/50 font-mono">
                     MiniMax H3 INT8 · 8 Steps · GPU Native
                   </span>
                 </div>
@@ -829,16 +840,17 @@ export default function VideoStudio({ apiKey }) {
                   <video src={generatedVideoUrl} controls autoPlay loop className="w-full h-full object-cover rounded-xl shadow-2xl" />
                   <a
                     href={generatedVideoUrl}
-                    download="scarlet_witch_fight.mp4"
-                    className="absolute bottom-3 right-3 bg-[#d9ff00] text-black font-black text-xs px-3 py-1.5 rounded-lg shadow-lg hover:scale-105 transition-all flex items-center gap-1 opacity-90 group-hover:opacity-100"
+                    download="openhiggs_output.mp4"
+                    className="absolute bottom-3 right-3 bg-[#d9ff00] text-black font-black text-xs px-3 py-1.5 rounded-lg shadow-lg hover:scale-105 transition-all flex items-center gap-1.5 opacity-90 group-hover:opacity-100"
                   >
-                    ↓ Download Video
+                    <DownloadIcon className="w-3.5 h-3.5 text-black" />
+                    <span>Download</span>
                   </a>
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center gap-2">
-                  <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center text-xl text-white/60">
-                    🎬
+                  <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center text-white/60">
+                    <ClapperboardIcon className="w-6 h-6 text-white/40" />
                   </div>
                   <span className="text-xs font-bold text-white/70">Ready to Render</span>
                   <span className="text-[10px] text-white/40 max-w-[180px]">
@@ -872,9 +884,9 @@ export default function VideoStudio({ apiKey }) {
               <button
                 type="button"
                 onClick={() => setShowPresetModal(false)}
-                className="text-white/40 hover:text-white"
+                className="text-white/40 hover:text-white p-1"
               >
-                ✕
+                <CloseIcon className="w-4 h-4" />
               </button>
             </div>
             <div className="grid grid-cols-1 gap-2.5 max-h-80 overflow-y-auto custom-scrollbar">
@@ -891,7 +903,7 @@ export default function VideoStudio({ apiKey }) {
                       : 'border-white/10 hover:border-white/30 bg-white/5 text-white/80'
                   }`}
                 >
-                  <span className="text-2xl">{preset.icon}</span>
+                  <div className="flex-shrink-0">{preset.icon}</div>
                   <div className="flex flex-col">
                     <span className="text-xs font-black text-[#d9ff00]">{preset.name}</span>
                     <span className="text-[11px] text-white/60">{preset.description}</span>
