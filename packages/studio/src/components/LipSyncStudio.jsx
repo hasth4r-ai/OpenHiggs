@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { processLipSync, uploadFile } from '../kie.js';
+import { processLipSync, uploadFile, LOCAL_ENGINE_CONNECTED } from '../local.js';
 import {
     lipsyncModels,
     imageLipSyncModels,
@@ -46,6 +46,7 @@ function MediaPickerButton({ accept, label, icon, onUpload, onClear, uploadState
     return (
         <button
             type="button"
+            disabled={!LOCAL_ENGINE_CONNECTED}
             title={
                 uploadState === UPLOAD_STATE.READY
                     ? `${fileName} — click to clear`
@@ -56,7 +57,7 @@ function MediaPickerButton({ accept, label, icon, onUpload, onClear, uploadState
         >
             <input
                 ref={inputRef}
-                type="file"
+                type="file" disabled={!LOCAL_ENGINE_CONNECTED}
                 accept={accept}
                 className="hidden"
                 onChange={handleChange}
@@ -722,7 +723,7 @@ export default function LipSyncStudio({ apiKey, onGenerationComplete, historyIte
                                 <button
                                     type="button"
                                     onClick={handleGenerate}
-                                    disabled={isGenerating}
+                                    disabled={!LOCAL_ENGINE_CONNECTED || isGenerating}
                                     className="ml-auto px-6 py-2.5 bg-primary text-black font-black text-sm rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-glow disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                                 >
                                     {isGenerating ? (
@@ -757,7 +758,7 @@ export default function LipSyncStudio({ apiKey, onGenerationComplete, historyIte
                         <button
                             type="button"
                             onClick={handleGenerate}
-                            disabled={isGenerating}
+                            disabled={!LOCAL_ENGINE_CONNECTED || isGenerating}
                             className="bg-white/10 hover:bg-white/20 px-6 py-2.5 rounded-2xl text-xs font-bold transition-all border border-white/5 backdrop-blur-lg text-white disabled:opacity-50"
                         >
                             ↻ Regenerate

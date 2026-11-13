@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { generateImage, generateI2I, uploadFile } from "../kie.js";
+import { generateImage, generateI2I, uploadFile, LOCAL_ENGINE_CONNECTED } from "../local.js";
 import {
   t2iModels,
   i2iModels,
@@ -291,7 +291,7 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear }) {
       {/* Hidden file input */}
       <input
         ref={fileInputRef}
-        type="file"
+        type="file" disabled={!LOCAL_ENGINE_CONNECTED}
         accept="image/*"
         multiple={isMulti}
         className="hidden"
@@ -302,6 +302,7 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear }) {
       <button
         ref={triggerRef}
         type="button"
+        disabled={!LOCAL_ENGINE_CONNECTED}
         title={triggerTitle}
         onClick={(e) => {
           e.stopPropagation();
@@ -887,7 +888,7 @@ export default function ImageStudio({ apiKey, onGenerationComplete, historyItems
             <button
               type="button"
               onClick={handleGenerate}
-              disabled={generating}
+              disabled={!LOCAL_ENGINE_CONNECTED || generating}
               className="bg-white/10 hover:bg-white/20 px-6 py-2.5 rounded-2xl text-xs font-bold transition-all border border-white/5 backdrop-blur-lg text-white disabled:opacity-50"
             >
               ↻ Regenerate
@@ -1145,7 +1146,7 @@ export default function ImageStudio({ apiKey, onGenerationComplete, historyItems
                 <button
                   type="button"
                   onClick={handleGenerate}
-                  disabled={generating}
+                  disabled={!LOCAL_ENGINE_CONNECTED || generating}
                   className="bg-primary text-black px-6 md:px-8 py-3 md:py-3.5 rounded-xl md:rounded-[1.5rem] font-black text-sm md:text-base hover:shadow-glow hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2.5 w-full sm:w-auto shadow-lg disabled:opacity-70 disabled:cursor-not-allowed disabled:scale-100"
                 >
                   {generating ? (

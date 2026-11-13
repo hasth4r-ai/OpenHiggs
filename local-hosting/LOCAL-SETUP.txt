@@ -23,10 +23,11 @@ The unused Electron binary was not downloaded; this is the browser version.
 
 NETWORK AND CURRENT SCOPE
 The web server listens only on 127.0.0.1. Other devices cannot access it.
-This is the repository's original cloud-backed app, hosted locally.
-The original API-key screen and cloud generation code remain present.
+The studio opens directly in local preview mode without an API key.
+Cloud uploads and generation are disabled, including if a key was previously
+stored in the browser. The model menus still show the original catalog.
 Local generation, H3 prompting improvements, and local LoRA integration
-are not implemented. No API key was supplied and no generation was run.
+are not implemented. No generation has been run.
 
 STORAGE
 The original app still uses browser localStorage where implemented.

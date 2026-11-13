@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { generateImage } from '../kie.js';
+import { generateImage, LOCAL_ENGINE_CONNECTED } from '../local.js';
 
 // ─── Constants (inlined from promptUtils) ───────────────────────────────────
 
@@ -628,6 +628,7 @@ export default function CinemaStudio({ apiKey, onGenerationComplete, historyItem
                     className={`mt-8 flex gap-3 justify-center transition-opacity duration-500 delay-500 ${showCanvas ? 'opacity-100' : 'opacity-0'}`}
                 >
                     <button
+                        disabled={!LOCAL_ENGINE_CONNECTED}
                         onClick={() => handleRegenerate()}
                         className="bg-white/10 hover:bg-white/20 px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wide transition-all border border-white/5 backdrop-blur-lg text-white hover:border-white/20"
                     >
@@ -736,7 +737,7 @@ export default function CinemaStudio({ apiKey, onGenerationComplete, historyItem
                         {/* Generate Button */}
                         <button
                             className="h-[56px] px-8 bg-[#d9ff00] text-black rounded-xl font-black text-xs uppercase hover:bg-white transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                            disabled={isGenerating || !settings.prompt.trim()}
+                            disabled={!LOCAL_ENGINE_CONNECTED || isGenerating || !settings.prompt.trim()}
                             onClick={handleGenerate}
                         >
                             {isGenerating ? 'SHOOTING...' : 'GENERATE ✨'}
