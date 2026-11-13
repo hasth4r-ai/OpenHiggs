@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { generate } from '../../../local-hosting/wan-client.mjs';
 import {randomUUID} from 'node:crypto';
-import {saveGeneration,runId} from '../../../local-hosting/generation-history.mjs';
+import {saveGeneration,runId,activeTasks} from '../../../local-hosting/generation-history.mjs';
 
 export const runtime = 'nodejs';
 let active = false;
@@ -26,18 +26,24 @@ export async function POST(request) {
       let writes=Promise.resolve();
       let historyWrites=Promise.resolve();
       const persist=()=>{const snapshot={...record};historyWrites=historyWrites.then(()=>saveGeneration(snapshot)).catch(e=>console.error('History save failed',e));};
+      const control={requested:false,finished:false,onCancel:async()=>{
+        Object.assign(record,{cancelRequested:true,phase:'Cancelling…',eta:null});persist();await historyWrites;
+      }};
+      activeTasks.set(record.id,control);
       const log=value=>{writes=writes.then(()=>fs.appendFile(logPath,JSON.stringify({time:new Date().toISOString(),...value})+'\n')).catch(console.error);};
       (async()=>{
         try {
           const config=JSON.parse((await fs.readFile(path.join(root,'config','wan-engine.json'),'utf8')).replace(/^\uFEFF/,''));
           send({type:'start',message:'Connecting to running Wan2GP...'});
-          await generate({base:config.baseUrl,wanRoot:config.wanRoot,ffmpeg:config.ffmpeg,uploadsDir:path.join(root,'data','uploads'),outputDir:path.join(root,'data','generations'),body},data=>{
+          await generate({base:config.baseUrl,wanRoot:config.wanRoot,ffmpeg:config.ffmpeg,uploadsDir:path.join(root,'data','uploads'),outputDir:path.join(root,'data','generations'),body,control},data=>{
             if(data.type==='progress') Object.assign(record,{progress:data.pct,phase:data.phase,eta:data.eta,step:data.step,total:data.total});
             if(data.type==='done') Object.assign(record,{status:'completed',progress:100,videoUrl:data.videoUrl,fileName:data.fileName,completedAt:new Date().toISOString()});
+            if(data.type==='done')control.finished=true;
+            if(control.requested && !control.finished){record.phase='Cancelling…';record.eta=null;}
             persist();if(data.type!=='progress')log(data);send(data);
           },log);
-        } catch(e) {Object.assign(record,{status:'failed',error:e.message,completedAt:new Date().toISOString()});persist();log({error:e.stack});send({type:'error',message:e.message});}
-        finally {await Promise.all([writes,historyWrites]);active=false;if(connected){connected=false;controller.close();}}
+        } catch(e) {const cancelled=e.name==='AbortError';Object.assign(record,{status:cancelled?'cancelled':'failed',phase:cancelled?'Cancelled':'Failed',eta:null,error:cancelled?'Cancelled by you.':e.message,completedAt:new Date().toISOString()});persist();log({error:e.stack});send({type:cancelled?'cancelled':'error',message:record.error});}
+        finally {control.finished=true;await Promise.all([writes,historyWrites]);activeTasks.delete(record.id);active=false;if(connected){connected=false;controller.close();}}
       })();
     },
     cancel(){connected=false;},

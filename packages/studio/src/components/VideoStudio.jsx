@@ -292,6 +292,10 @@ export default function VideoStudio({ apiKey }) {
                 setGenerationProgress(100);
                 setHistoryVersion(v => v + 1);
                 setGenerationStatus('Complete!');
+              } else if (data.type === 'cancelled') {
+                completed = true;
+                setGenerationStatus('Cancelled');
+                setHistoryVersion(v => v + 1);
               } else if (data.type === 'error') {
                 throw new Error(data.message);
               }

@@ -54,7 +54,9 @@ export async function call(base, name, data, session, log=()=>{}) {
   throw new Error(`Wan2GP ${name} disconnected before completion`);
 }
 
-export async function generate({base,wanRoot,uploadsDir,outputDir,ffmpeg,body},send,log) {
+export async function generate({base,wanRoot,uploadsDir,outputDir,ffmpeg,body,control={requested:false}},send,log) {
+  const checkCancelled=()=>{if(control.requested)throw Object.assign(new Error('Cancelled by you.'),{name:'AbortError'});};
+  checkCancelled();
   const session=randomUUID(), tag=`openhiggs_${session}`;
   const snapshot=async()=>{const r=await fetch(`${base}/deepy/deepy_api/state`); if(!r.ok) throw new Error('Wan2GP shared generation API is unavailable'); return r.json();};
   const initial=await snapshot();
@@ -79,6 +81,7 @@ export async function generate({base,wanRoot,uploadsDir,outputDir,ffmpeg,body},s
   settings.multi_prompts_gen_type = 'FG';
   files.unshift(['queue.json',Buffer.from(JSON.stringify([{id:1,params:settings}]))]);
   const form=new FormData();form.append('files',new Blob([zipFiles(files)]),'openhiggs.zip');
+  checkCancelled();
   const upload=await fetch(`${base}/gradio_api/upload`,{method:'POST',body:form});
   if(!upload.ok) throw new Error(`Wan2GP upload failed: HTTP ${upload.status}`);
   const [uploaded]=await upload.json();
@@ -91,11 +94,16 @@ export async function generate({base,wanRoot,uploadsDir,outputDir,ffmpeg,body},s
   log({loaded});
   if(!accepted) throw new Error(rejection || 'Wan2GP did not accept the generation task. See generation log.');
   await call(base,'init_process_queue_if_any',[],session,log);
-  let running=true, pollingError=null, sample=null;
+  let running=true, pollingError=null, sample=null, abortSent=false;
   const polling=(async()=>{
     while(running) {
       try {
         const s=await snapshot(), p=s.progress;
+        if(control.requested && p && !abortSent && running) {
+          const stopped=await fetch(`${base}/deepy/deepy_api/control`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'abort',payload:{}})});
+          if(!stopped.ok)throw new Error('Wan2GP cancellation was not accepted. Retrying…');
+          abortSent=true;
+        }
         if(p) {
           const d=p.type==='progress'?p.data:[], position=d[0], phase=p.description || 'Working';
           const step=Array.isArray(position)?Number(position[0]):0, total=Array.isArray(position)?Number(position[1]):0;
@@ -105,7 +113,7 @@ export async function generate({base,wanRoot,uploadsDir,outputDir,ffmpeg,body},s
             if(!sample || sample.total!==total || step<sample.step) sample={step,total,time:Date.now()};
             else if(step>sample.step) eta=Math.max(0,(Date.now()-sample.time)/1000/(step-sample.step)*(total-step));
           } else sample=null;
-          send({type:'progress',pct:Math.max(0,Math.min(100,pct)),step,total,phase,eta});
+          send({type:'progress',pct:Math.max(0,Math.min(100,pct)),step,total,phase:control.requested?'Cancelling…':phase,eta:control.requested?null:eta});
         }
       } catch(e) {pollingError=e.message;}
       await new Promise(r=>setTimeout(r,1000));
@@ -113,6 +121,7 @@ export async function generate({base,wanRoot,uploadsDir,outputDir,ffmpeg,body},s
   })();
   try { await call(base,'process_tasks_1',[],session,log); }
   finally {running=false;await polling;}
+  checkCancelled();
   const config=JSON.parse(await fs.readFile(path.join(wanRoot,'wgp_config.json'),'utf8'));
   const root=path.resolve(wanRoot,config.save_path || 'outputs');
   async function find(dir) { for(const e of await fs.readdir(dir,{withFileTypes:true})) {const p=path.join(dir,e.name);if(e.isDirectory()){const found=await find(p);if(found)return found;}else if(e.name.startsWith(tag)&&/\.(mp4|mov|webm|mkv)$/i.test(e.name))return p;} }
@@ -120,6 +129,12 @@ export async function generate({base,wanRoot,uploadsDir,outputDir,ffmpeg,body},s
   if(!result) throw new Error(`Wan2GP finished without a video. ${pollingError || 'Check the Wan2GP generation log for the engine error.'}`);
   await fs.mkdir(outputDir,{recursive:true}); const name=`${tag}.mp4`;
   send({type:'progress',pct:0,phase:'Preparing browser video',step:0,total:0,eta:null});
-  await execFileAsync(ffmpeg,['-nostdin','-y','-i',result,'-c:v','libx264','-preset','fast','-crf','18','-pix_fmt','yuv420p','-c:a','aac','-movflags','+faststart',path.join(outputDir,name)],{windowsHide:true});
+  checkCancelled();
+  const partial=path.join(outputDir,`${tag}.partial`);
+  try {
+    await execFileAsync(ffmpeg,['-nostdin','-y','-i',result,'-c:v','libx264','-preset','fast','-crf','18','-pix_fmt','yuv420p','-c:a','aac','-movflags','+faststart','-f','mp4',partial],{windowsHide:true});
+    checkCancelled();
+    await fs.rename(partial,path.join(outputDir,name));
+  } finally {await fs.unlink(partial).catch(()=>{});}
   send({type:'done',videoUrl:`/api/generations/${encodeURIComponent(name)}`,fileName:name});
 }

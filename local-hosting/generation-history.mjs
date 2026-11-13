@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto';
 
 globalThis.openHiggsRunId ||= randomUUID();
 export const runId = globalThis.openHiggsRunId;
+globalThis.openHiggsTasks ||= new Map();
+export const activeTasks = globalThis.openHiggsTasks;
 export function historyDirectory() {return path.resolve(process.cwd(),'..','data','database','generation-history');}
 export async function saveGeneration(record) {
   const dir=historyDirectory(); await fs.mkdir(dir,{recursive:true});
@@ -18,7 +20,7 @@ export async function saveGeneration(record) {
     }
   }
 }
-export async function listGenerations() {
+export async function listGenerations({includeDeleted=false}={}) {
   const dir=historyDirectory(); await fs.mkdir(dir,{recursive:true});
   const entries=await fs.readdir(dir);
   const records=await Promise.all(entries.filter(n=>n.endsWith('.json')).map(async n=>{
@@ -33,5 +35,5 @@ export async function listGenerations() {
     const stat=await fs.stat(path.join(outputs,name));
     records.push({id:name,fileName:name,videoUrl:`/api/generations/${encodeURIComponent(name)}`,createdAt:stat.mtime.toISOString(),status:'completed',prompt:'',model:'MiniMax H3',references:[]});
   }
-  return records.sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt));
+  return records.filter(r=>includeDeleted||!r.deletedAt).sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt));
 }
