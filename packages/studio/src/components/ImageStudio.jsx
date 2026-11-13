@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { generateImage, generateI2I, uploadFile, LOCAL_ENGINE_CONNECTED } from "../local.js";
+import { generateImage, generateI2I, uploadFile, LOCAL_ENGINE_CONNECTED, LOCAL_UPLOADS_ENABLED } from "../local.js";
 import {
   t2iModels,
   i2iModels,
@@ -291,7 +291,7 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear }) {
       {/* Hidden file input */}
       <input
         ref={fileInputRef}
-        type="file" disabled={!LOCAL_ENGINE_CONNECTED}
+        type="file" disabled={!LOCAL_UPLOADS_ENABLED}
         accept="image/*"
         multiple={isMulti}
         className="hidden"
@@ -302,8 +302,19 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear }) {
       <button
         ref={triggerRef}
         type="button"
-        disabled={!LOCAL_ENGINE_CONNECTED}
+        disabled={!LOCAL_UPLOADS_ENABLED}
         title={triggerTitle}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'copy';
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            handleFileChange({ target: { files: e.dataTransfer.files } });
+          }
+        }}
         onClick={(e) => {
           e.stopPropagation();
           setPanelOpen((o) => !o);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { processLipSync, uploadFile, LOCAL_ENGINE_CONNECTED } from '../local.js';
+import { processLipSync, uploadFile, LOCAL_ENGINE_CONNECTED, LOCAL_UPLOADS_ENABLED } from '../local.js';
 import {
     lipsyncModels,
     imageLipSyncModels,
@@ -46,18 +46,28 @@ function MediaPickerButton({ accept, label, icon, onUpload, onClear, uploadState
     return (
         <button
             type="button"
-            disabled={!LOCAL_ENGINE_CONNECTED}
+            disabled={!LOCAL_UPLOADS_ENABLED}
             title={
                 uploadState === UPLOAD_STATE.READY
                     ? `${fileName} — click to clear`
                     : `Upload ${label.toLowerCase()} file`
             }
+            onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'copy';
+            }}
+            onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const file = e.dataTransfer.files?.[0];
+                if (file) onUpload(file);
+            }}
             onClick={handleClick}
             className={`flex-shrink-0 w-14 h-14 rounded-xl border transition-all flex items-center justify-center relative overflow-hidden group ${borderClass}`}
         >
             <input
                 ref={inputRef}
-                type="file" disabled={!LOCAL_ENGINE_CONNECTED}
+                type="file" disabled={!LOCAL_UPLOADS_ENABLED}
                 accept={accept}
                 className="hidden"
                 onChange={handleChange}

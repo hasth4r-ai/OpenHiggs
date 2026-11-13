@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { generateVideo, generateI2V, uploadFile, LOCAL_ENGINE_CONNECTED } from '../local.js';
+import { generateVideo, generateI2V, uploadFile, LOCAL_ENGINE_CONNECTED, LOCAL_UPLOADS_ENABLED } from '../local.js';
 import {
     t2vModels,
     i2vModels,
@@ -210,6 +210,101 @@ export default function VideoStudio({ apiKey, onGenerationComplete, historyItems
     const [videoUploading, setVideoUploading] = useState(false);
     const [uploadedVideoName, setUploadedVideoName] = useState(null);
 
+    // ── multi-reference cards for H3 / Higgsfield workflow ──
+    const [references, setReferences] = useState([]);
+    const [isDragOver, setIsDragOver] = useState(false);
+
+    const addReference = (type, url, name) => {
+        setReferences(prev => {
+            const count = prev.filter(r => r.type === type).length + 1;
+            const tag = type === 'video' ? `@video${count}` : `@image${count}`;
+            const defaultRole = type === 'video' 
+                ? 'camera_motion' 
+                : (count === 1 ? 'character_identity' : 'costume_style');
+            const newRef = {
+                id: Date.now().toString() + Math.random(),
+                type,
+                tag,
+                name: name || `${type}_${count}`,
+                url,
+                role: defaultRole,
+            };
+            return [...prev, newRef];
+        });
+    };
+
+    const updateReferenceRole = (id, newRole) => {
+        setReferences(prev => prev.map(r => r.id === id ? { ...r, role: newRole } : r));
+    };
+
+    const removeReference = (id) => {
+        setReferences(prev => {
+            const next = prev.filter(r => r.id !== id);
+            let imgIdx = 1;
+            let vidIdx = 1;
+            return next.map(r => {
+                if (r.type === 'video') {
+                    return { ...r, tag: `@video${vidIdx++}` };
+                } else {
+                    return { ...r, tag: `@image${imgIdx++}` };
+                }
+            });
+        });
+    };
+
+    const insertTagIntoPrompt = (tag) => {
+        if (!textareaRef.current) return;
+        const text = prompt || '';
+        const start = textareaRef.current.selectionStart || text.length;
+        const end = textareaRef.current.selectionEnd || text.length;
+        const before = text.substring(0, start);
+        const after = text.substring(end);
+        const needsSpaceBefore = before.length > 0 && !before.endsWith(' ');
+        const needsSpaceAfter = after.length > 0 && !after.startsWith(' ');
+        const insertion = `${needsSpaceBefore ? ' ' : ''}${tag}${needsSpaceAfter ? ' ' : ' '}`;
+        const newText = before + insertion + after;
+        setPrompt(newText);
+        setTimeout(() => {
+            if (textareaRef.current) {
+                textareaRef.current.focus();
+                const newPos = start + insertion.length;
+                textareaRef.current.setSelectionRange(newPos, newPos);
+            }
+        }, 10);
+    };
+
+    const handleFilesDrop = async (fileList) => {
+        if (!fileList || fileList.length === 0) return;
+        for (const file of Array.from(fileList)) {
+            if (file.type.startsWith('image/')) {
+                setImageUploading(true);
+                try {
+                    const url = await uploadFile(apiKey, file, (pct) => setImageProgress(pct));
+                    setUploadedImageUrl(url);
+                    addReference('image', url, file.name);
+                    setPromptDisabled(false);
+                } catch (err) {
+                    alert(`Failed to upload image: ${err.message}`);
+                } finally {
+                    setImageUploading(false);
+                }
+            } else if (file.type.startsWith('video/')) {
+                setVideoUploading(true);
+                try {
+                    const url = await uploadFile(apiKey, file, (pct) => setVideoProgress(pct));
+                    setUploadedVideoUrl(url);
+                    setUploadedVideoName(file.name);
+                    addReference('video', url, file.name);
+                    setPromptDisabled(false);
+                } catch (err) {
+                    alert(`Failed to upload video: ${err.message}`);
+                } finally {
+                    setVideoUploading(false);
+                }
+            }
+        }
+    };
+
     // ── generation / canvas ──
     const [generating, setGenerating] = useState(false);
     const [generateError, setGenerateError] = useState(null);
@@ -338,6 +433,7 @@ export default function VideoStudio({ apiKey, onGenerationComplete, historyItems
                 setImageProgress(pct);
             });
             setUploadedImageUrl(url);
+            addReference('image', url, file.name);
 
             // Clear v2v if active
             setUploadedVideoUrl(null);
@@ -388,6 +484,7 @@ export default function VideoStudio({ apiKey, onGenerationComplete, historyItems
             });
             setUploadedVideoUrl(url);
             setUploadedVideoName(file.name);
+            addReference('video', url, file.name);
 
             // Clear image mode if active
             if (imageMode) {
@@ -759,7 +856,103 @@ export default function VideoStudio({ apiKey, onGenerationComplete, historyItems
 
                     {/* Prompt Bar */}
                     <div className="w-full max-w-4xl relative z-40 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-                        <div className="w-full bg-[#111]/90 backdrop-blur-xl border border-white/10 rounded-[1.5rem] md:rounded-[2.5rem] p-3 md:p-5 flex flex-col gap-3 md:gap-5 shadow-3xl">
+                        <div 
+                            onDragOver={(e) => {
+                                e.preventDefault();
+                                e.dataTransfer.dropEffect = 'copy';
+                                setIsDragOver(true);
+                            }}
+                            onDragLeave={(e) => {
+                                e.preventDefault();
+                                setIsDragOver(false);
+                            }}
+                            onDrop={(e) => {
+                                e.preventDefault();
+                                setIsDragOver(false);
+                                handleFilesDrop(e.dataTransfer.files);
+                            }}
+                            className={`w-full bg-[#111]/90 backdrop-blur-xl border ${isDragOver ? 'border-[#d9ff00] ring-2 ring-[#d9ff00]/40' : 'border-white/10'} rounded-[1.5rem] md:rounded-[2.5rem] p-3 md:p-5 flex flex-col gap-3 md:gap-5 shadow-3xl transition-all relative`}
+                        >
+                            {/* Drag Overlay Feedback */}
+                            {isDragOver && (
+                                <div className="absolute inset-0 bg-black/80 backdrop-blur-sm rounded-[1.5rem] md:rounded-[2.5rem] z-50 flex items-center justify-center border-2 border-dashed border-[#d9ff00] pointer-events-none">
+                                    <span className="text-[#d9ff00] font-black text-sm tracking-wide">Drop image or video here to add reference</span>
+                                </div>
+                            )}
+
+                            {/* Reference Tray (Higgsfield Style) */}
+                            {references.length > 0 && (
+                                <div className="flex flex-wrap items-center gap-2 px-2 pb-3 border-b border-white/10">
+                                    <span className="text-[10px] font-black text-white/50 uppercase tracking-widest mr-1">
+                                        References:
+                                    </span>
+                                    {references.map((ref) => (
+                                        <div 
+                                            key={ref.id} 
+                                            className="flex items-center gap-2 bg-[#1a1a1a] hover:bg-[#222] border border-white/10 rounded-xl px-2 py-1 transition-all shadow-sm"
+                                        >
+                                            <div className="w-6 h-6 rounded-lg overflow-hidden bg-black flex-shrink-0 border border-white/10">
+                                                {ref.type === 'video' ? (
+                                                    <video src={ref.url} className="w-full h-full object-cover" muted />
+                                                ) : (
+                                                    <img src={ref.url} alt="" className="w-full h-full object-cover" />
+                                                )}
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => insertTagIntoPrompt(ref.tag)}
+                                                title={`Click to insert ${ref.tag} into prompt`}
+                                                className="text-xs font-mono font-black text-[#d9ff00] hover:underline cursor-pointer"
+                                            >
+                                                {ref.tag}
+                                            </button>
+                                            <select
+                                                value={ref.role}
+                                                onChange={(e) => updateReferenceRole(ref.id, e.target.value)}
+                                                className="bg-black/70 text-[11px] text-white/90 rounded-md px-1.5 py-0.5 border border-white/15 focus:outline-none focus:border-[#d9ff00] cursor-pointer"
+                                            >
+                                                {ref.type === 'video' ? (
+                                                    <>
+                                                        <option value="camera_motion">Camera / Motion</option>
+                                                        <option value="continuation">Continuation</option>
+                                                        <option value="source_edit">Source Edit</option>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <option value="character_identity">Character / Face</option>
+                                                        <option value="costume_style">Costume / Outfit</option>
+                                                        <option value="environment">Environment / Style</option>
+                                                        <option value="keyframe_start">Start Keyframe</option>
+                                                        <option value="keyframe_end">End Keyframe</option>
+                                                    </>
+                                                )}
+                                            </select>
+                                            <button
+                                                type="button"
+                                                onClick={() => removeReference(ref.id)}
+                                                className="text-white/40 hover:text-red-400 text-xs px-1 rounded transition-colors"
+                                                title="Remove reference"
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
+                                    ))}
+                                    <button
+                                        type="button"
+                                        onClick={() => imageFileInputRef.current?.click()}
+                                        className="text-[11px] text-white/50 hover:text-white flex items-center gap-1 px-2.5 py-1 rounded-xl border border-dashed border-white/20 hover:border-white/50 transition-colors"
+                                    >
+                                        + Add image
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => videoFileInputRef.current?.click()}
+                                        className="text-[11px] text-white/50 hover:text-white flex items-center gap-1 px-2.5 py-1 rounded-xl border border-dashed border-white/20 hover:border-white/50 transition-colors"
+                                    >
+                                        + Add video
+                                    </button>
+                                </div>
+                            )}
 
                             {/* Top row: image picker + video picker + textarea */}
                             <div className="flex items-start gap-5 px-2">
@@ -768,14 +961,14 @@ export default function VideoStudio({ apiKey, onGenerationComplete, historyItems
                                 <div className="relative mt-1.5">
                                     <input
                                         ref={imageFileInputRef}
-                                        type="file" disabled={!LOCAL_ENGINE_CONNECTED}
+                                        type="file" disabled={!LOCAL_UPLOADS_ENABLED}
                                         accept="image/*"
                                         className="hidden"
                                         onChange={handleImageFileChange}
                                     />
                                     <button
                                         type="button"
-                                        disabled={!LOCAL_ENGINE_CONNECTED}
+                                        disabled={!LOCAL_UPLOADS_ENABLED}
                                         title={uploadedImageUrl ? 'Clear image' : 'Upload image for Image-to-Video'}
                                         onClick={() => uploadedImageUrl ? clearImageUpload() : imageFileInputRef.current?.click()}
                                         className={`w-10 h-10 shrink-0 rounded-xl border transition-all flex items-center justify-center relative overflow-hidden ${uploadedImageUrl ? 'border-primary/60 bg-primary/10' : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-primary/40'} group`}
@@ -803,14 +996,14 @@ export default function VideoStudio({ apiKey, onGenerationComplete, historyItems
                                 <div className="relative mt-1.5">
                                     <input
                                         ref={videoFileInputRef}
-                                        type="file" disabled={!LOCAL_ENGINE_CONNECTED}
+                                        type="file" disabled={!LOCAL_UPLOADS_ENABLED}
                                         accept="video/*"
                                         className="hidden"
                                         onChange={handleVideoFileChange}
                                     />
                                     <button
                                         type="button"
-                                        disabled={!LOCAL_ENGINE_CONNECTED}
+                                        disabled={!LOCAL_UPLOADS_ENABLED}
                                         title={uploadedVideoUrl ? `${uploadedVideoName} — click to clear` : 'Upload video to remove watermark'}
                                         onClick={() => uploadedVideoUrl ? clearVideoUpload() : videoFileInputRef.current?.click()}
                                         className={`w-10 h-10 shrink-0 rounded-xl border transition-all flex items-center justify-center relative overflow-hidden ${uploadedVideoUrl ? 'border-primary/60 bg-white/5' : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-primary/40'} group`}

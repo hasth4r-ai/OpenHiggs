@@ -42,9 +42,12 @@ export default function StandaloneShell() {
         </button>
       </header>
 
-      <div role="status" className="flex-shrink-0 px-4 py-3 border-b border-white/10 bg-[#111] text-sm text-white/70">
-        <strong className="text-[#d9ff00]">Local preview</strong>
-        {' — Explore the studios without an API key. Local models are not connected yet; uploads and generation are disabled.'}
+      <div role="status" className="flex-shrink-0 px-4 py-2.5 border-b border-white/10 bg-[#111] text-xs md:text-sm text-white/70 flex items-center justify-between">
+        <div>
+          <strong className="text-[#d9ff00]">Local Studio</strong>
+          {' — Local uploads & drag-and-drop active. Files save directly to data\\uploads.'}
+        </div>
+        <span className="hidden sm:inline text-xs text-white/40 font-mono">127.0.0.1:3000</span>
       </div>
 
       <main className="flex-1 min-h-0 overflow-y-auto">
