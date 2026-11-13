@@ -1,3 +1,4 @@
+import {processingSize} from '../packages/studio/src/inpaintResolution.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -6,6 +7,11 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {probeVideo,validatePair,normalizeMask,compositeProRes,makePreview,uploadedPath} from './inpaint-media.mjs';
 import {inpaintSettings} from './inpaint-settings.mjs';
+assert.deepEqual(processingSize({width:4096,height:2160},'480'),{width:896,height:480});
+assert.deepEqual(processingSize({width:4096,height:2160},'720'),{width:1376,height:736});
+assert.deepEqual(processingSize({width:2160,height:4096},'1080'),{width:1088,height:2048});
+assert.deepEqual(processingSize({width:4096,height:2160},'source'),{width:4096,height:2160});
+assert.throws(()=>processingSize({width:4096,height:2160},'bad'));
 const run=promisify(execFile),ffmpeg=process.argv[2];
 if(!ffmpeg)throw new Error('Pass the installed FFmpeg executable as the first argument.');
 const dir=await fs.mkdtemp(path.join(os.tmpdir(),'openhiggs-inpaint-test-'));

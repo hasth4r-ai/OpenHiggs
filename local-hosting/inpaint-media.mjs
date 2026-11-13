@@ -50,3 +50,7 @@ export async function compositeProRes({ffmpeg,source,generated,mask,output,info,
 export async function makePreview({ffmpeg,input,output,signal}) {
   await exec(ffmpeg,['-nostdin','-y','-threads','2','-i',input,'-c:v','libx264','-preset','fast','-crf','20','-pix_fmt','yuv420p','-threads','2','-c:a','aac','-movflags','+faststart','-f','mp4',output],{windowsHide:true,maxBuffer:4*1024*1024,signal});
 }
+
+export async function makeInputPreview({ffmpeg,input,output}) {
+  await exec(ffmpeg,['-nostdin','-y','-threads','2','-i',input,'-map','0:v:0','-an','-vf',"scale=960:960:force_original_aspect_ratio=decrease:force_divisible_by=2",'-c:v','libx264','-preset','veryfast','-crf','23','-pix_fmt','yuv420p','-threads','2','-movflags','+faststart','-f','mp4',output],{windowsHide:true,maxBuffer:4*1024*1024,timeout:180000});
+}

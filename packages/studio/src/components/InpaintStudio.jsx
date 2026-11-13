@@ -1,11 +1,23 @@
 'use client';
 import {useState,useEffect} from 'react';
 import VideoWorkflowTabs from './VideoWorkflowTabs.jsx';
+import {processingSize} from '../inpaintResolution.mjs';
 import GenerationHistory from './GenerationHistory.jsx';
-const defaults={mode:'remove',source:'',mask:'',reference:'',prompt:'',profile:'422hq',denoise:1,expand:0,feather:2,invert:false,keepAudio:true};
+const defaults={processingResolution:'720',mode:'remove',source:'',mask:'',reference:'',prompt:'',profile:'422hq',denoise:1,expand:0,feather:2,invert:false,keepAudio:true};
 export default function InpaintStudio({onNavigate,initialDraft,blocked=false}) {
   const [form,setForm]=useState({...defaults,...initialDraft}),[names,setNames]=useState({}),[info,setInfo]=useState(null);
   const [uploading,setUploading]=useState(''),[error,setError]=useState(''),[status,setStatus]=useState(''),[generating,setGenerating]=useState(false),[busy,setBusy]=useState(false),[refresh,setRefresh]=useState(0);
+  const [previews,setPreviews]=useState({});
+  useEffect(()=>{
+    let active=true;
+    for(const key of ['source','mask']){
+      const url=form[key];if(!url)continue;
+      setPreviews(old=>({...old,[key]:{input:url,loading:true}}));
+      fetch('/api/inpaint/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})}).then(async response=>{const result=await response.json();if(!response.ok)throw new Error(result.error);if(active)setPreviews(old=>({...old,[key]:{input:url,url:result.url}}));}).catch(error=>{if(active)setPreviews(old=>({...old,[key]:{input:url,error:error.message}}));});
+    }
+    return()=>{active=false;};
+  },[form.source,form.mask]);
+  const size=info?processingSize(info.source,form.processingResolution):null;
   const update=(key,value)=>setForm(old=>({...old,[key]:value}));
   useEffect(()=>{if(initialDraft){setForm({...defaults,...initialDraft});setInfo(null);}},[initialDraft]);
   useEffect(()=>{
@@ -37,6 +49,7 @@ export default function InpaintStudio({onNavigate,initialDraft,blocked=false}) {
       {uploading===key?'Uploading…':names[key]|| (form[key]?decodeURIComponent(form[key].split('/').pop()):key==='reference'?'Choose a clean frame or replacement image':'Choose MOV, MP4, MKV, WebM or AVI')}
       <input aria-label={title} type="file" disabled={!!uploading||generating} className="block mt-2 w-full text-xs text-white/40 file:mr-2 file:rounded file:border-0 file:bg-white/10 file:text-white file:px-2 file:py-1" accept={key==='reference'?'.png,.jpg,.jpeg,.webp':'.mov,.mp4,.mkv,.webm,.avi'} onChange={e=>{upload(key,e.target.files?.[0]);e.target.value='';}}/>
     </label>
+    {key!=='reference'&&form[key]&&<div className="mt-3">{previews[key]?.input===form[key]&&previews[key]?.url?<video aria-label={title+' preview'} src={previews[key].url} controls muted playsInline preload="metadata" className="w-full max-h-48 rounded bg-black"/>:<p role="status" className="text-xs text-white/50">{previews[key]?.input===form[key]&&previews[key]?.error||'Preparing preview…'}</p>}</div>}
     {key==='reference'&&form.reference&&<img src={form.reference} alt="Inpaint reference" className="mt-3 w-full max-h-32 object-contain rounded"/>}
   </div>;
   return <div className="flex h-full min-h-0 bg-[#0a0a0a] text-white">
@@ -49,6 +62,8 @@ export default function InpaintStudio({onNavigate,initialDraft,blocked=false}) {
         <p className="text-xs text-white/40">White = edit. Black = keep. The mask must match the source dimensions, frame rate and frame count.</p>
         <label className="flex gap-2 text-xs text-white/70"><input type="checkbox" checked={form.invert} onChange={e=>update('invert',e.target.checked)}/>Invert mask (edit black areas)</label>
         {info&&<p className="text-xs text-[#d9ff00]/80">{info.source.width} × {info.source.height} · {info.source.fps.toFixed(3)} fps · {info.source.duration.toFixed(2)}s{info.aligned?' · Mask aligned':''}</p>}
+        <label className="block text-xs text-white/70">Processing resolution<select aria-label="Processing resolution" value={form.processingResolution} disabled={generating} onChange={e=>update('processingResolution',e.target.value)} className={field+' mt-2'}><option value="480">480p — faster</option><option value="720">720p — balanced</option><option value="1080">1080p — more detail</option><option value="source">Source resolution</option></select></label>
+        <p className="text-xs text-white/40">{size?'AI processing: '+size.width+' × '+size.height+'. ':''}ProRes output stays at source resolution. Lower settings upscale the edited region; they do not restore native 4K detail.</p>
         {fileSlot('reference','Reference image',true)}
         <p className="text-xs text-white/40">Use a clean frame for removal, or a replacement-object image. This guides appearance; it does not anchor an exact frame.</p>
         <label className="block text-xs font-semibold">Instruction<textarea aria-label="Inpaint instruction" value={form.prompt} disabled={generating} onChange={e=>update('prompt',e.target.value)} placeholder={form.mode==='remove'?'Remove the person and reconstruct the wall behind them.':'Replace the chair with the red armchair in the reference image.'} className={field+' mt-2 min-h-28 resize-y font-normal'}/></label>
