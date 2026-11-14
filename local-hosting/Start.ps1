@@ -7,6 +7,7 @@ $context = Get-OpenHiggsContext $InstallRoot
 if (-not (Test-Path -LiteralPath (Join-Path $context.Repo '.next\BUILD_ID'))) {
     throw 'No production build exists. Run Build OpenHiggs.cmd first.'
 }
+& (Join-Path $PSScriptRoot 'Ensure-Wan2GP.ps1') -Context $context
 $existing = Get-ManagedServer $context
 if ($existing) {
     if (-not (Test-StudioResponse $context.Url)) { throw 'OpenHiggs is running but is not responding. Check logs, then stop and start it.' }
@@ -39,3 +40,4 @@ if (-not $ready) { throw ('Server started but readiness could not be confirmed. 
 Write-Host ('OpenHiggs is running at ' + $context.Url)
 Write-Host 'Use Stop OpenHiggs.cmd to stop it. Closing the browser does not stop the server.'
 if (-not $NoBrowser) { Start-Process $context.Url }
+
