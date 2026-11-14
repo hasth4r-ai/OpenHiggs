@@ -88,6 +88,11 @@ body {
   transform: scale(1.005);
 }
 
+.studio-tab-panel {
+  width: 100%;
+  height: 100%;
+}
+
 /* Typography across all inputs */
 html, body, button, input, textarea, select, option, pre, code, kbd, samp,
 .font-sans, .font-mono, .font-serif { font-family: var(--font-ui); }

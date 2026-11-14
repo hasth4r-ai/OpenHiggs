@@ -15,7 +15,7 @@ export default function StandaloneShell() {
   const [showSettings, setShowSettings] = useState(false);
 
   return (
-    <div className="h-screen bg-[#09090b] flex flex-col overflow-hidden text-white select-none">
+    <div className="h-screen bg-[#09090b] flex flex-col overflow-hidden text-white">
       {/* Top Header - Borderless, clean dark surface with subtle elevation */}
       <header className="flex-shrink-0 flex flex-wrap items-center justify-between gap-4 px-6 py-3.5 bg-[#0e0e13]/90 backdrop-blur-xl">
         {/* Logo & Branding */}

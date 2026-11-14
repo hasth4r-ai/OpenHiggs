@@ -319,11 +319,17 @@ export default function VideoStudio({ apiKey }) {
 
   return (
     <div className="relative h-full overflow-hidden bg-[#09090b]">
-      <div className="studio-tab-panel" data-active={subTab==='edit'} aria-hidden={subTab!=='edit'} inert={subTab!=='edit'}>
+      <div 
+        className={`h-full w-full ${subTab === 'edit' ? 'block' : 'hidden'}`}
+        aria-hidden={subTab !== 'edit'}
+      >
         <InpaintStudio onNavigate={setSubTab} initialDraft={inpaintDraft} blocked={isGenerating}/>
       </div>
-      <div className="studio-tab-panel" data-active={subTab!=='edit'} aria-hidden={subTab==='edit'} inert={subTab==='edit'}>
-      <div className="h-full flex overflow-hidden bg-[#09090b] text-white select-none">
+      <div 
+        className={`h-full w-full ${subTab !== 'edit' ? 'block' : 'hidden'}`}
+        aria-hidden={subTab === 'edit'}
+      >
+        <div className="h-full flex overflow-hidden bg-[#09090b] text-white">
       
       {/* ──────────────────────────────────────────────────────────────────────────
           LEFT SIDEBAR: STUDIO CONTROLS
