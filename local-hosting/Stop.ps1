@@ -13,3 +13,4 @@ if ($serverProcess) {
     Write-Host 'OpenHiggs is not running.'
 }
 if (Test-Path -LiteralPath $context.State) { Remove-Item -LiteralPath $context.State }
+& (Join-Path $PSScriptRoot 'Stop-Wan2GP.ps1')
