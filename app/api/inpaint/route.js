@@ -16,7 +16,10 @@ export async function POST(request) {
   catch(e){return Response.json({error:e.message},{status:400});}
   if(active) return Response.json({error:'A generation is already running.'},{status:409});
   active=true;
-  const record={id:randomUUID(),runId,createdAt:new Date().toISOString(),status:'generating',model:'MiniMax H3 Inpaint',workflow:'inpaint',inpaintRequest:body,prompt:body.prompt || '',compiledPrompt:body.compiledPrompt || '',references:body.references || [],duration:body.duration,quality:body.quality,preset:body.preset || 'general',aspectRatio:body.aspectRatio || 'Auto',progress:0,phase:'Connecting to Wan2GP',eta:null};
+  const modelName = (!body.model || body.model === 'wan21' || body.model === 'vace_14B_fusionix')
+    ? 'Wan 2.1 (Vace 14B FusioniX)'
+    : 'MiniMax H3 Inpaint';
+  const record={id:randomUUID(),runId,createdAt:new Date().toISOString(),status:'generating',model:modelName,workflow:'inpaint',inpaintRequest:body,prompt:body.prompt || '',compiledPrompt:body.compiledPrompt || '',references:body.references || [],duration:body.duration,quality:body.quality,preset:body.preset || 'general',aspectRatio:body.aspectRatio || 'Auto',progress:0,phase:'Connecting to Wan2GP',eta:null};
   if(!acquireGeneration(record.id)){active=false;return Response.json({error:'Another local generation is running. Wait for it to finish.'},{status:409});}
   try {await saveGeneration(record);} catch(e){releaseGeneration(record.id);active=false;return Response.json({error:'Could not save generation history. Check available disk space.'},{status:500});}
   let connected=true;

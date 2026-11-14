@@ -4,6 +4,16 @@ import {HistoryClockIcon,DownloadIcon,CloseIcon,ClapperboardIcon} from './icons.
 import CustomSelect from './CustomSelect.jsx';
 
 const time = seconds => `${Math.floor(Math.max(0,seconds)/60)}m ${Math.floor(Math.max(0,seconds)%60)}s`;
+const getModelName = (item) => {
+  if (!item) return 'MiniMax H3';
+  if (item.inpaintRequest) {
+    const m = item.inpaintRequest.model;
+    if (m === 'minimax_h3') return 'MiniMax H3 Inpaint';
+    return 'Wan 2.1 (Vace 14B FusioniX)';
+  }
+  if (item.workflow === 'motion') return 'Wan 2.1 Motion Control';
+  return item.model || 'MiniMax H3';
+};
 const dateLabel = value => {
   const date=new Date(value),today=new Date();
   if(date.toDateString()===today.toDateString()) return 'Today';
@@ -97,7 +107,7 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
           {entries.map(item=><article key={item.id} className={`bg-[var(--bg-card,#14141a)] shadow-lg rounded-2xl overflow-hidden ${view==='list'?'flex flex-col xl:flex-row':view==='masonry'?'break-inside-avoid mb-4':''}`}>
             <div className={`relative bg-[var(--bg-card,#14141a)] ${view==='list'?'xl:w-[44%] xl:max-w-[620px] shrink-0 aspect-video':view==='masonry'?'min-h-40':'aspect-video'}`}>{preview(item)}</div>
             <div className="p-5 flex flex-col min-w-0 flex-1 bg-[var(--bg-card,#14141a)]">
-              <div className="flex items-center gap-2 text-[11px] text-white/40"><span className="text-white/70 font-medium">{item.model || 'MiniMax H3'}</span><span>·</span><span>{item.quality || item.resolution || 'Local video'}</span>{item.duration&&<><span>·</span><span>{item.duration}s</span></>}<time className="ml-auto" dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</time></div>
+              <div className="flex items-center gap-2 text-[11px] text-white/40"><span className="text-white/70 font-medium">{getModelName(item)}</span><span>·</span><span>{item.quality || item.resolution || 'Local video'}</span>{item.duration&&<><span>·</span><span>{item.duration}s</span></>}<time className="ml-auto" dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</time></div>
               <button className="mt-3 text-sm leading-relaxed text-white/85 text-left line-clamp-3 hover:text-white" onClick={()=>setDetail(item)} aria-label="Open generation details">{item.prompt || 'Prompt unavailable for this older generation.'}</button>
               {!!item.references?.length&&<div className="flex gap-2 mt-3">{item.references.map((ref,i)=><div key={ref.id||i} title={ref.tag || ref.name} className="w-9 h-9 rounded-md overflow-hidden bg-black/50">{ref.type==='image'?<img alt={ref.tag||'Reference image'} src={ref.url} className="w-full h-full object-cover"/>:<span className="text-[9px] flex items-center justify-center h-full">{ref.type}</span>}</div>)}</div>}
               <div className="mt-auto">{actions(item)}<button className="text-[11px] text-white/60 mt-3 hover:underline hover:text-white" onClick={()=>setDetail(item)}>View details ↗</button></div>
@@ -107,7 +117,7 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
       </section>)}
     </div>
     <dialog ref={dialog} onCancel={()=>setDetail(null)} onClose={()=>setDetail(null)} onClick={e=>{if(e.target===dialog.current)dialog.current.close();}} className="fixed inset-0 m-auto w-[min(1100px,92vw)] max-h-[90vh] rounded-3xl bg-[#111115] text-white p-0 shadow-2xl backdrop:bg-black/80 animate-scale-in">
-      {detail&&<><header className="p-4 flex items-center justify-between"><h2 className="font-semibold text-sm">Generation details</h2><button aria-label="Close generation details" onClick={()=>dialog.current.close()} className={button}><CloseIcon className="w-4 h-4"/></button></header><div className="grid lg:grid-cols-[1.4fr_1fr]"><div className="bg-black flex items-center justify-center">{preview(detail)}</div><div className="p-6 max-h-[70vh] overflow-y-auto"><p className="text-xs text-white/40">{detail.model} · {new Date(detail.createdAt).toLocaleString()}</p><h3 className="mt-6 text-xs text-white/50">{detail.promptSource==='embedded'?'Saved model prompt':'Prompt'}</h3><p className="mt-2 text-sm leading-relaxed whitespace-pre-wrap">{detail.prompt||'The original prompt was not saved.'}</p>{detail.resolution&&<p className="text-xs mt-4 text-white/50">Resolution: {detail.resolution}</p>}{detail.seed!==undefined&&<p className="text-xs mt-2 text-white/50">Seed: {detail.seed}</p>}{actions(detail)}</div></div></>}
+      {detail&&<><header className="p-4 flex items-center justify-between"><h2 className="font-semibold text-sm">Generation details</h2><button aria-label="Close generation details" onClick={()=>dialog.current.close()} className={button}><CloseIcon className="w-4 h-4"/></button></header><div className="grid lg:grid-cols-[1.4fr_1fr]"><div className="bg-black flex items-center justify-center">{preview(detail)}</div><div className="p-6 max-h-[70vh] overflow-y-auto"><p className="text-xs text-white/40">{getModelName(detail)} · {new Date(detail.createdAt).toLocaleString()}</p><h3 className="mt-6 text-xs text-white/50">{detail.promptSource==='embedded'?'Saved model prompt':'Prompt'}</h3><p className="mt-2 text-sm leading-relaxed whitespace-pre-wrap">{detail.prompt||'The original prompt was not saved.'}</p>{detail.resolution&&<p className="text-xs mt-4 text-white/50">Resolution: {detail.resolution}</p>}{detail.seed!==undefined&&<p className="text-xs mt-2 text-white/50">Seed: {detail.seed}</p>}{actions(detail)}</div></div></>}
     </dialog>
   </main>;
 }
