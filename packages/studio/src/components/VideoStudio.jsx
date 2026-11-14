@@ -9,7 +9,8 @@ import { compileH3Prompt } from '../h3Compiler.js';
 import { 
   ImageIcon, VideoCameraIcon, MicrophoneIcon, SparkleIcon, EditPencilIcon,
   LayersIcon, FilmFrameIcon, HistoryClockIcon, BookInfoIcon, TrackingIcon,
-  ZoomInIcon, OrbitIcon, DroneIcon, ClapperboardIcon, DownloadIcon, CloseIcon
+  ZoomInIcon, OrbitIcon, DroneIcon, ClapperboardIcon, DownloadIcon, CloseIcon,
+  PlusIcon, RefreshIcon, TrashIcon, ArrowRightIcon
 } from './icons.jsx';
 
 // Camera & VFX Presets for MiniMax H3
@@ -96,6 +97,12 @@ export default function VideoStudio({ apiKey }) {
   const videoInputRef = useRef(null);
   const audioInputRef = useRef(null);
   const textareaRef = useRef(null);
+  const firstFrameInputRef = useRef(null);
+  const lastFrameInputRef = useRef(null);
+
+  // Keyframe helpers for [Frames] mode
+  const firstFrame = references.find(r => r.role === 'keyframe_start');
+  const lastFrame = references.find(r => r.role === 'keyframe_end');
 
   // Calculate reference counts
   const imageCount = references.filter(r => r.type === 'image').length;
@@ -149,6 +156,42 @@ export default function VideoStudio({ apiKey }) {
         return { ...r, tag: `@image${i++}` };
       });
     });
+  };
+
+  const handleUploadFrame = async (file, role) => {
+    if (!file) return;
+    setIsUploading(true);
+    setUploadProgress(0);
+    try {
+      const url = await uploadFile(apiKey, file, (pct) => setUploadProgress(pct));
+      setReferences(prev => {
+        const withoutRole = prev.filter(r => r.role !== role);
+        const tag = role === 'keyframe_start' ? '@image1' : '@image2';
+        return [
+          ...withoutRole,
+          {
+            id: Date.now().toString() + Math.random(),
+            type: 'image',
+            tag,
+            name: file.name || (role === 'keyframe_start' ? 'first_frame.jpg' : 'last_frame.jpg'),
+            url,
+            role,
+          },
+        ];
+      });
+    } catch (err) {
+      console.error('[Video Studio Frame Upload Error]:', err);
+      alert(`Frame upload failed: ${err.message}`);
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(0);
+      if (firstFrameInputRef.current) firstFrameInputRef.current.value = '';
+      if (lastFrameInputRef.current) lastFrameInputRef.current.value = '';
+    }
+  };
+
+  const removeKeyframe = (role) => {
+    setReferences(prev => prev.filter(r => r.role !== role));
   };
 
   const insertTagIntoPrompt = (tag) => {
@@ -219,12 +262,20 @@ export default function VideoStudio({ apiKey }) {
     const handlePaste = (e) => {
       if (subTab === 'edit') return;
       if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length > 0) {
+        if (refMode === 'frames') {
+          const file = e.clipboardData.files[0];
+          if (file && file.type.startsWith('image/')) {
+            const hasFirst = references.some(r => r.role === 'keyframe_start');
+            handleUploadFrame(file, hasFirst ? 'keyframe_end' : 'keyframe_start');
+            return;
+          }
+        }
         handleUploadFiles(e.clipboardData.files);
       }
     };
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
-  }, [references, subTab]);
+  }, [references, subTab, refMode]);
 
   // Compile H3 prompt live
   const compiledH3Prompt = compileH3Prompt({
@@ -394,166 +445,356 @@ export default function VideoStudio({ apiKey }) {
             </button>
           </div>
 
-          {/* Add References Dropzone Card (Dotted/Dashed Border) */}
-          <div
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.dataTransfer.dropEffect = 'copy';
-              setIsDragOver(true);
-            }}
-            onDragLeave={(e) => {
-              e.preventDefault();
-              setIsDragOver(false);
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              setIsDragOver(false);
-              handleUploadFiles(e.dataTransfer.files);
-            }}
-            className={`upload-dropzone rounded-2xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all ${
-              isDragOver ? 'border-blue-500 bg-blue-500/10 ring-2 ring-blue-500/30' : ''
-            }`}
-            onClick={() => imageInputRef.current?.click()}
-          >
-            {/* Hidden File Inputs */}
-            <input
-              ref={imageInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(e) => handleUploadFiles(e.target.files)}
-            />
-            <input
-              ref={videoInputRef}
-              type="file"
-              accept="video/*"
-              multiple
-              className="hidden"
-              onChange={(e) => handleUploadFiles(e.target.files)}
-            />
-            <input
-              ref={audioInputRef}
-              type="file"
-              accept="audio/*"
-              multiple
-              className="hidden"
-              onChange={(e) => handleUploadFiles(e.target.files)}
-            />
-
-            {/* Three Circular Icons: Image, Video, Audio */}
-            <div className="flex items-center gap-2.5">
-              <div 
-                title="Add Image Reference"
-                onClick={(e) => { e.stopPropagation(); imageInputRef.current?.click(); }}
-                className="w-9 h-9 rounded-full bg-white/5 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-white/80 cursor-pointer"
+          {/* References Mode vs Frames Mode */}
+          {refMode === 'references' ? (
+            <>
+              {/* Add References Dropzone Card (Dotted/Dashed Border) */}
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'copy';
+                  setIsDragOver(true);
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  setIsDragOver(false);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDragOver(false);
+                  handleUploadFiles(e.dataTransfer.files);
+                }}
+                className={`upload-dropzone rounded-2xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all ${
+                  isDragOver ? 'border-blue-500 bg-blue-500/10 ring-2 ring-blue-500/30' : ''
+                }`}
+                onClick={() => imageInputRef.current?.click()}
               >
-                <ImageIcon className="w-4 h-4" />
-              </div>
-              <div 
-                title="Add Video Reference"
-                onClick={(e) => { e.stopPropagation(); videoInputRef.current?.click(); }}
-                className="w-9 h-9 rounded-full bg-white/5 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-white/80 cursor-pointer"
-              >
-                <VideoCameraIcon className="w-4 h-4" />
-              </div>
-              <div 
-                title="Add Audio Reference"
-                onClick={(e) => { e.stopPropagation(); audioInputRef.current?.click(); }}
-                className="w-9 h-9 rounded-full bg-white/5 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-white/80 cursor-pointer"
-              >
-                <MicrophoneIcon className="w-4 h-4" />
-              </div>
-            </div>
+                {/* Hidden File Inputs */}
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => handleUploadFiles(e.target.files)}
+                />
+                <input
+                  ref={videoInputRef}
+                  type="file"
+                  accept="video/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => handleUploadFiles(e.target.files)}
+                />
+                <input
+                  ref={audioInputRef}
+                  type="file"
+                  accept="audio/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => handleUploadFiles(e.target.files)}
+                />
 
-            <div className="text-center">
-              <span className="text-xs font-bold text-white block">
-                {isUploading ? `Uploading... ${uploadProgress}%` : 'Add references'}
-              </span>
-              <span className="text-[10px] text-white/50 block mt-0.5">
-                Up to 9 images, 3 videos, and 3 audio files
-              </span>
-              <span className="text-[9px] text-blue-400/90 font-mono block mt-1">
-                Drop files here or Paste from Clipboard (<kbd>Ctrl+V</kbd>)
-              </span>
-            </div>
-          </div>
-
-          {/* Reference Chips / Tray (When files exist) */}
-          {references.length > 0 && (
-            <div className="flex flex-col gap-2 bg-[#18181f] p-2.5 rounded-2xl">
-              <div className="flex items-center justify-between px-1">
-                <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest">
-                  Attached Elements ({references.length})
-                </span>
-                <span className="text-[9px] text-white/40">
-                  Img: {imageCount}/9 · Vid: {videoCount}/3 · Aud: {audioCount}/3
-                </span>
-              </div>
-              <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto custom-scrollbar">
-                {references.map(ref => (
-                  <div
-                    key={ref.id}
-                    className="flex items-center justify-between gap-2 bg-[#22222b] p-1.5 rounded-xl hover:bg-[#282833] transition-all"
+                {/* Three Circular Icons: Image, Video, Audio */}
+                <div className="flex items-center gap-2.5">
+                  <div 
+                    title="Add Image Reference"
+                    onClick={(e) => { e.stopPropagation(); imageInputRef.current?.click(); }}
+                    className="w-9 h-9 rounded-full bg-white/5 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-white/80 cursor-pointer"
                   >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-8 h-8 rounded-lg overflow-hidden bg-black/60 flex-shrink-0 flex items-center justify-center">
-                        {ref.type === 'video' ? (
-                          <video src={ref.url} className="w-full h-full object-cover" muted />
-                        ) : ref.type === 'audio' ? (
-                          <MicrophoneIcon className="w-4 h-4 text-blue-400" />
-                        ) : (
-                          <img src={ref.url} alt="" className="w-full h-full object-cover" />
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => insertTagIntoPrompt(ref.tag)}
-                        title={`Click to insert ${ref.tag} into prompt`}
-                        className="text-xs font-mono font-bold text-blue-400 hover:underline flex-shrink-0"
-                      >
-                        {ref.tag}
-                      </button>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      <select
-                        value={ref.role}
-                        onChange={(e) => updateReferenceRole(ref.id, e.target.value)}
-                        className="bg-[#18181f] text-[10px] text-white/80 rounded-md px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      >
-                        {ref.type === 'video' ? (
-                          <>
-                            <option value="camera_motion">Camera / Motion</option>
-                            <option value="continuation">Continuation</option>
-                            <option value="source_edit">Source Edit</option>
-                          </>
-                        ) : ref.type === 'audio' ? (
-                          <>
-                            <option value="voice_reference">Voice Reference</option>
-                            <option value="soundtrack">Soundtrack / BGM</option>
-                          </>
-                        ) : (
-                          <>
-                            <option value="character_identity">Character / Face</option>
-                            <option value="costume_style">Costume / Outfit</option>
-                            <option value="environment">Environment / Style</option>
-                            <option value="keyframe_start">Start Keyframe</option>
-                            <option value="keyframe_end">End Keyframe</option>
-                          </>
-                        )}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => removeReference(ref.id)}
-                        className="text-white/40 hover:text-red-400 p-1 transition-colors"
-                        title="Remove"
-                      >
-                        <CloseIcon className="w-3 h-3" />
-                      </button>
-                    </div>
+                    <ImageIcon className="w-4 h-4" />
                   </div>
-                ))}
+                  <div 
+                    title="Add Video Reference"
+                    onClick={(e) => { e.stopPropagation(); videoInputRef.current?.click(); }}
+                    className="w-9 h-9 rounded-full bg-white/5 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-white/80 cursor-pointer"
+                  >
+                    <VideoCameraIcon className="w-4 h-4" />
+                  </div>
+                  <div 
+                    title="Add Audio Reference"
+                    onClick={(e) => { e.stopPropagation(); audioInputRef.current?.click(); }}
+                    className="w-9 h-9 rounded-full bg-white/5 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-white/80 cursor-pointer"
+                  >
+                    <MicrophoneIcon className="w-4 h-4" />
+                  </div>
+                </div>
+
+                <div className="text-center">
+                  <span className="text-xs font-bold text-white block">
+                    {isUploading ? `Uploading... ${uploadProgress}%` : 'Add references'}
+                  </span>
+                  <span className="text-[10px] text-white/50 block mt-0.5">
+                    Up to 9 images, 3 videos, and 3 audio files
+                  </span>
+                  <span className="text-[9px] text-blue-400/90 font-mono block mt-1">
+                    Drop files here or Paste from Clipboard (<kbd>Ctrl+V</kbd>)
+                  </span>
+                </div>
+              </div>
+
+              {/* Reference Chips / Tray (When files exist) */}
+              {references.length > 0 && (
+                <div className="flex flex-col gap-2 bg-[#18181f] p-2.5 rounded-2xl">
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest">
+                      Attached Elements ({references.length})
+                    </span>
+                    <span className="text-[9px] text-white/40">
+                      Img: {imageCount}/9 · Vid: {videoCount}/3 · Aud: {audioCount}/3
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto custom-scrollbar">
+                    {references.map(ref => (
+                      <div
+                        key={ref.id}
+                        className="flex items-center justify-between gap-2 bg-[#22222b] p-1.5 rounded-xl hover:bg-[#282833] transition-all"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-8 h-8 rounded-lg overflow-hidden bg-black/60 flex-shrink-0 flex items-center justify-center">
+                            {ref.type === 'video' ? (
+                              <video src={ref.url} className="w-full h-full object-cover" muted />
+                            ) : ref.type === 'audio' ? (
+                              <MicrophoneIcon className="w-4 h-4 text-blue-400" />
+                            ) : (
+                              <img src={ref.url} alt="" className="w-full h-full object-cover" />
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => insertTagIntoPrompt(ref.tag)}
+                            title={`Click to insert ${ref.tag} into prompt`}
+                            className="text-xs font-mono font-bold text-blue-400 hover:underline flex-shrink-0"
+                          >
+                            {ref.tag}
+                          </button>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <select
+                            value={ref.role}
+                            onChange={(e) => updateReferenceRole(ref.id, e.target.value)}
+                            className="bg-[#18181f] text-[10px] text-white/80 rounded-md px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          >
+                            {ref.type === 'video' ? (
+                              <>
+                                <option value="camera_motion">Camera / Motion</option>
+                                <option value="continuation">Continuation</option>
+                                <option value="source_edit">Source Edit</option>
+                              </>
+                            ) : ref.type === 'audio' ? (
+                              <>
+                                <option value="voice_reference">Voice Reference</option>
+                                <option value="soundtrack">Soundtrack / BGM</option>
+                              </>
+                            ) : (
+                              <>
+                                <option value="character_identity">Character / Face</option>
+                                <option value="costume_style">Costume / Outfit</option>
+                                <option value="environment">Environment / Style</option>
+                                <option value="keyframe_start">Start Keyframe</option>
+                                <option value="keyframe_end">End Keyframe</option>
+                              </>
+                            )}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => removeReference(ref.id)}
+                            className="text-white/40 hover:text-red-400 p-1 transition-colors"
+                            title="Remove"
+                          >
+                            <CloseIcon className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            /* Frames Mode: First Frame & Last Frame Interface */
+            <div className="flex flex-col gap-3 animate-fade-in">
+              {/* Mode Description banner */}
+              <div className="flex items-center justify-between px-1">
+                <div className="flex items-center gap-1.5">
+                  <FilmFrameIcon className="w-3.5 h-3.5 text-blue-400" />
+                  <span className="text-[11px] font-bold text-white/80">Keyframe Animation</span>
+                </div>
+                <span className="text-[10px] font-mono text-blue-400 font-semibold">Start → End</span>
+              </div>
+
+              {/* Two Frames Grid */}
+              <div className="grid grid-cols-2 gap-2.5">
+                {/* First Frame Slot */}
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between px-0.5">
+                    <span className="text-[11px] font-bold text-white uppercase tracking-wider">
+                      First Frame
+                    </span>
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 font-semibold">
+                      Start
+                    </span>
+                  </div>
+
+                  <input
+                    ref={firstFrameInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) handleUploadFrame(e.target.files[0], 'keyframe_start');
+                      e.target.value = '';
+                    }}
+                  />
+
+                  {firstFrame ? (
+                    <div className="relative group rounded-2xl overflow-hidden aspect-[4/3] bg-black/60 shadow-inner">
+                      <img
+                        src={firstFrame.url}
+                        alt="First frame"
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      />
+                      {/* Hover overlay with action buttons */}
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => firstFrameInputRef.current?.click()}
+                          title="Replace First Frame"
+                          className="w-8 h-8 rounded-xl bg-white/20 hover:bg-blue-600 text-white flex items-center justify-center transition-all interactive-hover"
+                        >
+                          <RefreshIcon className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeKeyframe('keyframe_start')}
+                          title="Remove First Frame"
+                          className="w-8 h-8 rounded-xl bg-white/20 hover:bg-red-500 text-white flex items-center justify-center transition-all interactive-hover"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                      {/* Label chip */}
+                      <div className="absolute bottom-1.5 left-1.5 right-1.5 flex items-center justify-between pointer-events-none">
+                        <span className="text-[9px] font-mono font-bold bg-black/80 backdrop-blur px-1.5 py-0.5 rounded text-blue-400 truncate max-w-[110px]">
+                          {firstFrame.name}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (e.dataTransfer.files?.[0]) handleUploadFrame(e.dataTransfer.files[0], 'keyframe_start');
+                      }}
+                      onClick={() => firstFrameInputRef.current?.click()}
+                      className="upload-dropzone rounded-2xl p-3 flex flex-col items-center justify-center text-center cursor-pointer aspect-[4/3] transition-all hover:bg-blue-500/5 group"
+                    >
+                      <div className="w-8 h-8 rounded-full bg-blue-500/10 group-hover:bg-blue-600 text-blue-400 group-hover:text-white flex items-center justify-center mb-1 transition-all">
+                        <PlusIcon className="w-4 h-4" />
+                      </div>
+                      <span className="text-xs font-bold text-white/90 block leading-tight">
+                        Upload
+                      </span>
+                      <span className="text-[10px] text-white/40 block mt-0.5">
+                        Initial frame
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Last Frame Slot */}
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between px-0.5">
+                    <span className="text-[11px] font-bold text-white uppercase tracking-wider">
+                      Last Frame
+                    </span>
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/10 text-white/50">
+                      Optional
+                    </span>
+                  </div>
+
+                  <input
+                    ref={lastFrameInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) handleUploadFrame(e.target.files[0], 'keyframe_end');
+                      e.target.value = '';
+                    }}
+                  />
+
+                  {lastFrame ? (
+                    <div className="relative group rounded-2xl overflow-hidden aspect-[4/3] bg-black/60 shadow-inner">
+                      <img
+                        src={lastFrame.url}
+                        alt="Last frame"
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      />
+                      {/* Hover overlay with action buttons */}
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => lastFrameInputRef.current?.click()}
+                          title="Replace Last Frame"
+                          className="w-8 h-8 rounded-xl bg-white/20 hover:bg-blue-600 text-white flex items-center justify-center transition-all interactive-hover"
+                        >
+                          <RefreshIcon className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeKeyframe('keyframe_end')}
+                          title="Remove Last Frame"
+                          className="w-8 h-8 rounded-xl bg-white/20 hover:bg-red-500 text-white flex items-center justify-center transition-all interactive-hover"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                      {/* Label chip */}
+                      <div className="absolute bottom-1.5 left-1.5 right-1.5 flex items-center justify-between pointer-events-none">
+                        <span className="text-[9px] font-mono font-bold bg-black/80 backdrop-blur px-1.5 py-0.5 rounded text-blue-400 truncate max-w-[110px]">
+                          {lastFrame.name}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (e.dataTransfer.files?.[0]) handleUploadFrame(e.dataTransfer.files[0], 'keyframe_end');
+                      }}
+                      onClick={() => lastFrameInputRef.current?.click()}
+                      className="upload-dropzone rounded-2xl p-3 flex flex-col items-center justify-center text-center cursor-pointer aspect-[4/3] transition-all hover:bg-blue-500/5 group"
+                    >
+                      <div className="w-8 h-8 rounded-full bg-white/5 group-hover:bg-blue-600 text-white/50 group-hover:text-white flex items-center justify-center mb-1 transition-all">
+                        <PlusIcon className="w-4 h-4" />
+                      </div>
+                      <span className="text-xs font-bold text-white/70 block leading-tight">
+                        Upload
+                      </span>
+                      <span className="text-[10px] text-white/40 block mt-0.5">
+                        Ending frame
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Interpolation Guidance Note */}
+              <div className="bg-[#18181f] rounded-xl p-2.5 flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0 text-blue-400">
+                  <ArrowRightIcon className="w-3.5 h-3.5" />
+                </div>
+                <span className="text-[11px] text-white/60 leading-tight">
+                  {firstFrame && lastFrame
+                    ? 'AI will smoothly animate the transition between your first frame and last frame.'
+                    : firstFrame
+                    ? 'Video starts from the first frame anchor and evolves with your prompt.'
+                    : 'Upload a start frame (and optional end frame) to control video progression.'}
+                </span>
               </div>
             </div>
           )}

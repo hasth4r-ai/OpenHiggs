@@ -39,8 +39,10 @@ export function compileH3Prompt({
       subjectDefs.push(`<Subject ${sNum}> is the costume/outfit from <Picture ${picNum}>, preserving clothing shape, style, fabric texture, and color.`);
     } else if (ref.role === 'environment' || ref.role === 'style') {
       subjectDefs.push(`<Subject ${sNum}> is the atmospheric environment and stylistic lighting from <Picture ${picNum}>.`);
-    } else if (ref.role === 'keyframe_start' || ref.role === 'keyframe_end') {
-      subjectDefs.push(`<Picture ${picNum}> acts as the concrete composition keyframe anchor.`);
+    } else if (ref.role === 'keyframe_start') {
+      subjectDefs.push(`<Picture ${picNum}> establishes the concrete first frame starting composition and camera origin.`);
+    } else if (ref.role === 'keyframe_end') {
+      subjectDefs.push(`<Picture ${picNum}> establishes the concrete ending frame target composition and concluding scene state.`);
     } else {
       // Default: Character / Face identity
       subjectDefs.push(`<Subject ${sNum}> is the primary character from <Picture ${picNum}>, preserving facial identity, features, and physical appearance.`);
@@ -84,6 +86,10 @@ export function compileH3Prompt({
       retentionParts.push(`${sTag} (appears in [Shot 1]): attribute_transfer - garment structure, fabric texture, and color palette are transferred; surrounding background is not copied.`);
     } else if (ref.role === 'environment') {
       retentionParts.push(`${sTag} (appears in [Shot 1]): attribute_transfer - lighting tone, color grade, and atmosphere are transferred.`);
+    } else if (ref.role === 'keyframe_start') {
+      retentionParts.push(`${sTag} (anchors [Shot 1] start): keyframe_transition - the animation commences directly from <Picture ${idx + 1}>.`);
+    } else if (ref.role === 'keyframe_end') {
+      retentionParts.push(`${sTag} (anchors [Shot 1] end): keyframe_transition - the animation seamlessly converges toward <Picture ${idx + 1}>.`);
     } else {
       retentionParts.push(`${sTag} (appears in [Shot 1]): fully_preserved - facial features, identity, hair, and recognizable physical appearance are strictly retained.`);
     }
@@ -126,7 +132,16 @@ export function compileH3Prompt({
     cameraInstruction = 'The camera maintains fluid cinematic framing with subtle organic stabilization and realistic depth.';
   }
 
-  const detailedLine = `detailed_description: The target video is a cinematic high-fidelity sequence. [Shot 1] ${translatedBody || '<Subject 1> is shown in the scene'}. ${cameraInstruction} Lighting, textures, and physics remain photorealistic and coherent throughout the shot.`;
+  const hasStartFrame = imageRefs.some(r => r.role === 'keyframe_start');
+  const hasEndFrame = imageRefs.some(r => r.role === 'keyframe_end');
+  let keyframeInstruction = '';
+  if (hasStartFrame && hasEndFrame) {
+    keyframeInstruction = 'The visual sequence seamlessly interpolates and morphs from the starting first frame into the target ending frame.';
+  } else if (hasStartFrame) {
+    keyframeInstruction = 'The video commences locked to the initial first frame anchor and fluidly evolves forward.';
+  }
+
+  const detailedLine = `detailed_description: The target video is a cinematic high-fidelity sequence. [Shot 1] ${translatedBody || '<Subject 1> is shown in the scene'}. ${keyframeInstruction ? keyframeInstruction + ' ' : ''}${cameraInstruction} Lighting, textures, and physics remain photorealistic and coherent throughout the shot.`;
 
   // 5. overall_soundscape
   const soundscapeLine = `overall_soundscape: Environmental room tone, subtle fabric movement, gentle footsteps, and crisp atmospheric ambient presence.`;
