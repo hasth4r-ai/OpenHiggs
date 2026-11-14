@@ -3,6 +3,7 @@ import {useState,useEffect} from 'react';
 import VideoWorkflowTabs from './VideoWorkflowTabs.jsx';
 import {processingSize} from '../inpaintResolution.mjs';
 import GenerationHistory from './GenerationHistory.jsx';
+import CustomSelect from './CustomSelect.jsx';
 
 const VANCE_WORKFLOW_PROMPT = "A close shot of the reference man in a dim interior, his head tilted downward and both hands raised beside his fully uncovered face. His facial features, nose, mouth, cheeks, skin texture, and short hair match the supplied face reference. His hands are empty, with naturally curved fingers following the original movement. The space between his hands and face reveals his black shirt and the softly blurred background. Subtle purple light falls across his skin, with warm background illumination, deep shadows, soft focus, motion blur, and film grain matching the source footage. His ring, black wristwatch, and purple wristband retain their original appearance. Facial identity and anatomy remain consistent throughout the original head movement and camera motion.";
 
@@ -90,15 +91,20 @@ export default function InpaintStudio({onNavigate,initialDraft,blocked=false}) {
         {/* Model Selector */}
         <div className="flex items-center justify-between bg-[#18181f] p-2.5 rounded-xl">
           <span className="text-xs font-bold text-white/60">Model</span>
-          <select
-            value={form.model || 'wan21'}
-            disabled={generating}
-            onChange={e => update('model', e.target.value)}
-            className="bg-transparent text-xs font-black text-[var(--color-accent-text)] outline-none cursor-pointer"
-          >
-            <option value="wan21" className="bg-[#18181f] text-white">Wan 2.1 (Vace 14B FusioniX)</option>
-            <option value="minimax_h3" className="bg-[#18181f] text-white">MiniMax H3</option>
-          </select>
+          <div className="w-56">
+            <CustomSelect
+              value={form.model || 'wan21'}
+              disabled={generating}
+              onChange={e => update('model', e.target.value)}
+              options={[
+                ['wan21', 'Wan 2.1 (Vace 14B FusioniX)'],
+                ['minimax_h3', 'MiniMax H3']
+              ]}
+              size="sm"
+              className="!bg-transparent !border-0 !p-0 !text-xs !font-bold text-right"
+              align="right"
+            />
+          </div>
         </div>
 
         <div className="grid grid-cols-2 bg-[#18181f] rounded-xl p-1 gap-1">
@@ -111,14 +117,19 @@ export default function InpaintStudio({onNavigate,initialDraft,blocked=false}) {
         <label className="flex gap-2 text-xs text-white/70 cursor-pointer"><input type="checkbox" checked={form.invert} onChange={e=>update('invert',e.target.checked)}/>Invert mask (edit black areas)</label>
         {info&&<p className="text-xs text-[var(--color-accent-text)]">{info.source.width} × {info.source.height} · {info.source.fps.toFixed(3)} fps · {info.source.duration.toFixed(2)}s{info.aligned?' · Mask aligned':''}</p>}
 
-        <label className="block text-xs text-white/70">
-          Processing resolution
-          <select aria-label="Processing resolution" value={form.processingResolution} disabled={generating} onChange={e=>update('processingResolution',e.target.value)} className={field+' mt-2'}>
-            <option value="1080">1080p (1920×1088) — High fidelity</option>
-            <option value="720">720p (1280×720) — Balanced</option>
-            <option value="480">480p (848×480) — Fast preview</option>
-          </select>
-        </label>
+        <div className="space-y-1.5">
+          <label className="block text-xs text-white/70">Processing resolution</label>
+          <CustomSelect
+            value={form.processingResolution}
+            disabled={generating}
+            onChange={e => update('processingResolution', e.target.value)}
+            options={[
+              ['1080', '1080p (1920×1088) — High fidelity'],
+              ['720', '720p (1280×720) — Balanced'],
+              ['480', '480p (848×480) — Fast preview']
+            ]}
+          />
+        </div>
         <p className="text-xs text-white/40">{size?'AI processing: '+size.width+' × '+size.height+'. ':''}ProRes output stays at source resolution. Lower settings upscale the edited region; they do not restore native 4K detail.</p>
 
         {fileSlot('reference','Reference image',true)}
@@ -145,7 +156,18 @@ export default function InpaintStudio({onNavigate,initialDraft,blocked=false}) {
           />
         </div>
 
-        <label className="block text-xs text-white/70">MOV output<select aria-label="ProRes output profile" value={form.profile} onChange={e=>update('profile',e.target.value)} className={field+' mt-2'}><option value="422">ProRes 422</option><option value="422hq">ProRes 422 HQ</option><option value="4444">ProRes 4444 (opaque)</option></select></label>
+        <div className="space-y-1.5">
+          <label className="block text-xs text-white/70">MOV output</label>
+          <CustomSelect
+            value={form.profile}
+            onChange={e => update('profile', e.target.value)}
+            options={[
+              ['422', 'ProRes 422'],
+              ['422hq', 'ProRes 422 HQ'],
+              ['4444', 'ProRes 4444 (opaque)']
+            ]}
+          />
+        </div>
         <label className="flex gap-2 text-xs text-white/70 cursor-pointer"><input type="checkbox" checked={form.keepAudio} onChange={e=>update('keepAudio',e.target.checked)}/>Keep original audio</label>
 
         <details className="rounded-xl bg-[#18181f] p-3 text-xs">

@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import VideoWorkflowTabs from './VideoWorkflowTabs.jsx';
 import GenerationHistory from './GenerationHistory.jsx';
+import CustomSelect from './CustomSelect.jsx';
 import { compileH3Prompt } from '../h3Compiler.js';
 import {
   ImageIcon,
@@ -426,39 +427,33 @@ export default function MotionControlStudio({ onNavigate, blocked = false }) {
           <div className="grid grid-cols-3 gap-2">
             <div className="flex flex-col gap-1">
               <label className="text-[10px] text-white/50">Duration</label>
-              <select
+              <CustomSelect
                 value={duration}
                 onChange={(e) => setDuration(e.target.value)}
-                className="bg-[var(--bg-card,#14141a)] text-xs text-white p-2 rounded-lg outline-none"
-              >
-                <option value="5s">5s</option>
-                <option value="10s">10s</option>
-              </select>
+                options={['5s', '10s']}
+                size="sm"
+                className="!bg-[var(--bg-card,#14141a)] !rounded-lg"
+              />
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-[10px] text-white/50">Ratio</label>
-              <select
+              <CustomSelect
                 value={aspectRatio}
                 onChange={(e) => setAspectRatio(e.target.value)}
-                className="bg-[var(--bg-card,#14141a)] text-xs text-white p-2 rounded-lg outline-none"
-              >
-                <option value="Auto">Auto</option>
-                <option value="16:9">16:9</option>
-                <option value="9:16">9:16</option>
-                <option value="1:1">1:1</option>
-              </select>
+                options={['Auto', '16:9', '9:16', '1:1']}
+                size="sm"
+                className="!bg-[var(--bg-card,#14141a)] !rounded-lg"
+              />
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-[10px] text-white/50">Quality</label>
-              <select
+              <CustomSelect
                 value={quality}
                 onChange={(e) => setQuality(e.target.value)}
-                className="bg-[var(--bg-card,#14141a)] text-xs text-white p-2 rounded-lg outline-none"
-              >
-                <option value="480p">480p</option>
-                <option value="720p">720p</option>
-                <option value="1080p">1080p</option>
-              </select>
+                options={['480p', '720p', '1080p']}
+                size="sm"
+                className="!bg-[var(--bg-card,#14141a)] !rounded-lg"
+              />
             </div>
           </div>
 

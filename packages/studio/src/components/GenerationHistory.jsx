@@ -1,6 +1,7 @@
 'use client';
 import {useState,useEffect,useRef} from 'react';
 import {HistoryClockIcon,DownloadIcon,CloseIcon,ClapperboardIcon} from './icons.jsx';
+import CustomSelect from './CustomSelect.jsx';
 
 const time = seconds => `${Math.floor(Math.max(0,seconds)/60)}m ${Math.floor(Math.max(0,seconds)%60)}s`;
 const dateLabel = value => {
@@ -70,7 +71,20 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
       <div className="flex items-center gap-3"><span className="flex items-center gap-2 rounded-lg bg-white/[0.06] px-3 py-2 text-xs font-semibold"><HistoryClockIcon className="w-4 h-4 text-white/70"/>History</span><span className="text-xs text-white/35">{items.length} videos</span></div>
       <div className="flex flex-wrap gap-2 items-center">
         <input aria-label="Search generations" placeholder="Search prompts…" value={query} onChange={e=>setQuery(e.target.value)} className="w-40 xl:w-52 text-xs bg-[var(--bg-card,#14141a)] rounded-lg px-3 py-2.5 outline-none focus:ring-1 focus:ring-[var(--color-accent)] text-white transition-all"/>
-        <select aria-label="Filter generations" value={filter} onChange={e=>setFilter(e.target.value)} className="text-xs bg-[var(--bg-card,#14141a)] rounded-lg px-3 py-2.5 text-white/80 outline-none focus:ring-1 focus:ring-[var(--color-accent)]"><option value="all">All videos</option><option value="completed">Completed</option><option value="generating">In progress</option><option value="cancelled">Cancelled</option><option value="failed">Failed / interrupted</option></select>
+        <div className="w-36">
+          <CustomSelect
+            value={filter}
+            onChange={e => setFilter(e.target.value)}
+            options={[
+              ['all', 'All videos'],
+              ['completed', 'Completed'],
+              ['generating', 'In progress'],
+              ['cancelled', 'Cancelled'],
+              ['failed', 'Failed / interrupted']
+            ]}
+            className="!bg-[var(--bg-card,#14141a)] !py-2 !rounded-lg"
+          />
+        </div>
         <div className="flex rounded-lg bg-[var(--bg-card,#14141a)] p-1 gap-0.5" role="group" aria-label="History layout">{['list','grid','masonry'].map(v=><button key={v} aria-pressed={view===v} onClick={()=>changeView(v)} className={`px-2.5 py-1.5 rounded-md text-xs capitalize transition-all ${view===v?'bg-[var(--color-accent)] text-white shadow-sm':'text-white/40 hover:text-white'}`}>{v}</button>)}</div>
       </div>
     </header>

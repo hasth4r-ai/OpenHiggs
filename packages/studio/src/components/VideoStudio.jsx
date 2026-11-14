@@ -6,6 +6,7 @@ import VideoWorkflowTabs from './VideoWorkflowTabs.jsx';
 import GenerationHistory from './GenerationHistory.jsx';
 import InpaintStudio from './InpaintStudio.jsx';
 import MotionControlStudio from './MotionControlStudio.jsx';
+import CustomSelect from './CustomSelect.jsx';
 import { compileH3Prompt } from '../h3Compiler.js';
 import { 
   ImageIcon, VideoCameraIcon, MicrophoneIcon, SparkleIcon, EditPencilIcon,
@@ -582,33 +583,31 @@ export default function VideoStudio({ apiKey }) {
                           </button>
                         </div>
 
-                        <div className="flex items-center gap-1.5">
-                          <select
-                            value={ref.role}
-                            onChange={(e) => updateReferenceRole(ref.id, e.target.value)}
-                            className="bg-[#18181f] text-[10px] text-white/80 rounded-md px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
-                          >
-                            {ref.type === 'video' ? (
-                              <>
-                                <option value="camera_motion">Camera / Motion</option>
-                                <option value="continuation">Continuation</option>
-                                <option value="source_edit">Source Edit</option>
-                              </>
-                            ) : ref.type === 'audio' ? (
-                              <>
-                                <option value="voice_reference">Voice Reference</option>
-                                <option value="soundtrack">Soundtrack / BGM</option>
-                              </>
-                            ) : (
-                              <>
-                                <option value="character_identity">Character / Face</option>
-                                <option value="costume_style">Costume / Outfit</option>
-                                <option value="environment">Environment / Style</option>
-                                <option value="keyframe_start">Start Keyframe</option>
-                                <option value="keyframe_end">End Keyframe</option>
-                              </>
-                            )}
-                          </select>
+                        <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-end">
+                          <div className="w-32">
+                            <CustomSelect
+                              value={ref.role}
+                              onChange={(e) => updateReferenceRole(ref.id, e.target.value)}
+                              size="sm"
+                              className="!py-1 !px-2 !text-[10px] !rounded-md"
+                              options={
+                                ref.type === 'video' ? [
+                                  ['camera_motion', 'Camera / Motion'],
+                                  ['continuation', 'Continuation'],
+                                  ['source_edit', 'Source Edit']
+                                ] : ref.type === 'audio' ? [
+                                  ['voice_reference', 'Voice Reference'],
+                                  ['soundtrack', 'Soundtrack / BGM']
+                                ] : [
+                                  ['character_identity', 'Character / Face'],
+                                  ['costume_style', 'Costume / Outfit'],
+                                  ['environment', 'Environment / Style'],
+                                  ['keyframe_start', 'Start Keyframe'],
+                                  ['keyframe_end', 'End Keyframe']
+                                ]
+                              }
+                            />
+                          </div>
                           <button
                             type="button"
                             onClick={() => removeReference(ref.id)}
@@ -909,28 +908,27 @@ export default function VideoStudio({ apiKey }) {
             <div className="grid grid-cols-2 gap-2">
               <div className="flex flex-col gap-1 bg-[#18181f] p-2 rounded-xl">
                 <span className="text-[10px] font-bold text-white/50 uppercase">Duration</span>
-                <select
+                <CustomSelect
                   value={duration}
                   onChange={(e) => setDuration(e.target.value)}
-                  className="bg-transparent text-xs font-bold text-white focus:outline-none cursor-pointer"
-                >
-                  <option value="5s" className="bg-[#18181f]">5s</option>
-                  <option value="10s" className="bg-[#18181f]">10s</option>
-                </select>
+                  options={['5s', '10s']}
+                  className="!bg-transparent !border-0 !p-0 !text-xs !font-bold"
+                />
               </div>
 
               <div className="flex flex-col gap-1 bg-[#18181f] p-2 rounded-xl">
                 <span className="text-[10px] font-bold text-white/50 uppercase">Aspect Ratio</span>
-                <select
+                <CustomSelect
                   value={aspectRatio}
                   onChange={(e) => setAspectRatio(e.target.value)}
-                  className="bg-transparent text-xs font-bold text-white focus:outline-none cursor-pointer"
-                >
-                  <option value="Auto" className="bg-[#18181f]">Auto</option>
-                  <option value="16:9" className="bg-[#18181f]">16:9 (Landscape)</option>
-                  <option value="9:16" className="bg-[#18181f]">9:16 (Portrait)</option>
-                  <option value="1:1" className="bg-[#18181f]">1:1 (Square)</option>
-                </select>
+                  options={[
+                    ['Auto', 'Auto'],
+                    ['16:9', '16:9 (Landscape)'],
+                    ['9:16', '9:16 (Portrait)'],
+                    ['1:1', '1:1 (Square)']
+                  ]}
+                  className="!bg-transparent !border-0 !p-0 !text-xs !font-bold"
+                />
               </div>
             </div>
 
