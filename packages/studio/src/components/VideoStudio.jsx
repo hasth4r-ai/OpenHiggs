@@ -5,6 +5,7 @@ import { generateVideo, generateI2V, uploadFile, LOCAL_ENGINE_CONNECTED, LOCAL_U
 import VideoWorkflowTabs from './VideoWorkflowTabs.jsx';
 import GenerationHistory from './GenerationHistory.jsx';
 import InpaintStudio from './InpaintStudio.jsx';
+import MotionControlStudio from './MotionControlStudio.jsx';
 import { compileH3Prompt } from '../h3Compiler.js';
 import { 
   ImageIcon, VideoCameraIcon, MicrophoneIcon, SparkleIcon, EditPencilIcon,
@@ -369,18 +370,29 @@ export default function VideoStudio({ apiKey }) {
 
 
   return (
-    <div className="relative h-full overflow-hidden bg-[#09090b]">
+    <div className="relative h-full overflow-hidden bg-[var(--bg-app,rgb(9,9,11))]">
+      {/* Sub-tab 1: Edit Video (Inpaint) */}
       <div 
         className={`h-full w-full ${subTab === 'edit' ? 'block' : 'hidden'}`}
         aria-hidden={subTab !== 'edit'}
       >
         <InpaintStudio onNavigate={setSubTab} initialDraft={inpaintDraft} blocked={isGenerating}/>
       </div>
+
+      {/* Sub-tab 2: Motion Control */}
       <div 
-        className={`h-full w-full ${subTab !== 'edit' ? 'block' : 'hidden'}`}
-        aria-hidden={subTab === 'edit'}
+        className={`h-full w-full ${subTab === 'motion' ? 'block' : 'hidden'}`}
+        aria-hidden={subTab !== 'motion'}
       >
-        <div className="h-full flex overflow-hidden bg-[#09090b] text-white">
+        <MotionControlStudio onNavigate={setSubTab} blocked={isGenerating}/>
+      </div>
+
+      {/* Sub-tab 3: Create Video */}
+      <div 
+        className={`h-full w-full ${subTab === 'create' ? 'block' : 'hidden'}`}
+        aria-hidden={subTab !== 'create'}
+      >
+        <div className="h-full flex overflow-hidden bg-[var(--bg-app,rgb(9,9,11))] text-white">
       
       {/* ──────────────────────────────────────────────────────────────────────────
           LEFT SIDEBAR: STUDIO CONTROLS
@@ -653,7 +665,7 @@ export default function VideoStudio({ apiKey }) {
                       <img
                         src={firstFrame.url}
                         alt="First frame"
-                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        className="w-full h-full object-cover"
                       />
                       {/* Hover overlay with action buttons */}
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
@@ -731,7 +743,7 @@ export default function VideoStudio({ apiKey }) {
                       <img
                         src={lastFrame.url}
                         alt="Last frame"
-                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        className="w-full h-full object-cover"
                       />
                       {/* Hover overlay with action buttons */}
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
@@ -933,7 +945,7 @@ export default function VideoStudio({ apiKey }) {
                     onClick={() => setQuality(q)}
                     className={`px-2 py-0.5 text-[11px] font-bold rounded-md transition-all ${
                       quality === q
-                        ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25'
+                        ? 'bg-[var(--color-accent)] text-white shadow-sm'
                         : 'text-white/60 hover:text-white bg-white/5'
                     }`}
                   >
@@ -944,13 +956,13 @@ export default function VideoStudio({ apiKey }) {
             </div>
           </div>
 
-          {/* Blue Generate Button */}
+          {/* Accent Generate Button */}
           <div className="mt-auto pt-3">
             <button
               type="button"
               disabled={isGenerating}
               onClick={handleGenerate}
-              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm py-3.5 rounded-2xl shadow-lg shadow-blue-500/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+              className="w-full bg-[var(--color-accent)] hover:opacity-90 text-white font-bold text-sm py-3.5 rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
             >
               {isGenerating ? (
                 <>

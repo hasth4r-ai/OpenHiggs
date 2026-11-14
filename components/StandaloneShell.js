@@ -17,32 +17,33 @@ export default function StandaloneShell() {
   return (
     <div className="h-screen bg-[#09090b] flex flex-col overflow-hidden text-white">
       {/* Top Header - Borderless, clean dark surface with subtle elevation */}
-      <header className="flex-shrink-0 flex flex-wrap items-center justify-between gap-4 px-6 py-3.5 bg-[#0e0e13]/90 backdrop-blur-xl">
+      {/* Top Header - Compact single-row layout saving vertical space */}
+      <header className="flex-shrink-0 h-14 px-6 bg-[var(--bg-header,#0d0d12)] flex items-center justify-between gap-4 z-20 border-b border-white/[0.04]">
         {/* Logo & Branding */}
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-blue-600/15 flex items-center justify-center text-blue-500 shadow-sm transition-transform duration-300 hover:scale-105">
-            <FingerprintLogoIcon className="w-5 h-5 text-blue-500" />
+          <div className="w-8 h-8 rounded-xl bg-[var(--color-accent-subtle)] flex items-center justify-center text-[var(--color-accent)] shadow-sm">
+            <FingerprintLogoIcon className="w-5 h-5 text-white/90" />
           </div>
           <div className="flex flex-col">
-            <span className="text-white font-bold text-base tracking-tight leading-tight">
+            <span className="text-white font-bold text-sm tracking-tight leading-tight">
               Local AI Studio
             </span>
-            <span className="text-[10px] text-blue-400/80 font-medium tracking-wide">
+            <span className="text-[10px] text-white/50 font-medium tracking-wide">
               MiniMax H3 & Wan2GP
             </span>
           </div>
         </div>
 
         {/* Navigation Tabs - Borderless Pill Switcher */}
-        <nav aria-label="Studios" className="flex items-center gap-1.5 bg-[#14141a] p-1 rounded-2xl">
+        <nav aria-label="Studios" className="flex items-center gap-1 bg-[#14141a] p-1 rounded-2xl">
           {TABS.map((tab) => (
             <button
               key={tab.id}
               aria-pressed={activeTab === tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 text-xs font-semibold rounded-xl transition-all duration-200 ${
+              className={`px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all duration-200 ${
                 activeTab === tab.id
-                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/25 scale-[1.02]'
+                  ? 'bg-[var(--color-accent)] text-white shadow-md'
                   : 'text-white/60 hover:text-white hover:bg-white/[0.06]'
               }`}
             >
@@ -51,26 +52,26 @@ export default function StandaloneShell() {
           ))}
         </nav>
 
-        {/* Right Settings */}
-        <button
-          onClick={() => setShowSettings(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-white/60 hover:text-white hover:bg-white/[0.08] text-xs font-medium transition-all duration-200"
-        >
-          <GearIcon className="w-4 h-4 text-white/50" />
-          <span>Settings</span>
-        </button>
-      </header>
+        {/* Right Section: Engine Status & Settings */}
+        <div className="flex items-center gap-3">
+          <div role="status" className="hidden lg:flex items-center gap-2 bg-[#14141a] px-3 py-1.5 rounded-xl text-xs">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-white/80 font-semibold text-[11px]">Local Engine Active</span>
+            <span className="text-white/30 text-[10px]">·</span>
+            <span className="text-white/50 text-[10px] font-mono">Wan2GP & H3</span>
+            <span className="text-white/30 text-[10px]">·</span>
+            <span className="text-white/40 text-[10px] font-mono">127.0.0.1:3000</span>
+          </div>
 
-      {/* Status Sub-bar - Borderless */}
-      <div role="status" className="flex-shrink-0 px-6 py-2 bg-[#121217] text-xs text-white/70 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-          <strong className="text-blue-400 font-semibold">Local Engine Active</strong>
-          <span className="text-white/40">·</span>
-          <span className="text-white/60 text-[11px]">Direct Wan2GP queue connection. Offline media in data\uploads.</span>
+          <button
+            onClick={() => setShowSettings(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-white/60 hover:text-white hover:bg-white/[0.08] text-xs font-medium transition-all duration-200"
+          >
+            <GearIcon className="w-4 h-4 text-white/50" />
+            <span>Settings</span>
+          </button>
         </div>
-        <span className="hidden sm:inline text-[11px] text-white/40 font-mono">127.0.0.1:3000</span>
-      </div>
+      </header>
 
       {/* Main Studio Viewport */}
       <main className="flex-1 min-h-0 h-full flex flex-col overflow-hidden bg-[#09090b]">

@@ -286,3 +286,47 @@ export const EyeIcon = ({ className = "w-4 h-4", stroke = "currentColor" }) => (
     <circle cx="12" cy="12" r="3" />
   </svg>
 );
+
+export const ArrowUpIcon = ({ className = "w-4 h-4", stroke = "currentColor" }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="m5 12 7-7 7 7" />
+    <path d="M12 19V5" />
+  </svg>
+);
+
+export const ArrowDownIcon = ({ className = "w-4 h-4", stroke = "currentColor" }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="m19 12-7 7-7-7" />
+    <path d="M12 5v14" />
+  </svg>
+);
+
+export const RotateCwIcon = ({ className = "w-4 h-4", stroke = "currentColor" }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+    <path d="M21 3v5h-5" />
+  </svg>
+);
+
+export const RotateCcwIcon = ({ className = "w-4 h-4", stroke = "currentColor" }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+    <path d="M3 3v5h5" />
+  </svg>
+);
+
+
+export const ZoomOutIcon = ({ className = "w-4 h-4", stroke = "currentColor" }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <circle cx="11" cy="11" r="8" />
+    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    <line x1="8" y1="11" x2="14" y2="11" />
+  </svg>
+);
+
+export const CompassIcon = ({ className = "w-4 h-4", stroke = "currentColor" }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <circle cx="12" cy="12" r="10" />
+    <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+  </svg>
+);

@@ -11,28 +11,35 @@ module.exports = {
         extend: {
             colors: {
                 primary: {
-                    DEFAULT: '#3b82f6',
-                    hover: '#2563eb',
+                    DEFAULT: 'var(--color-accent, #29364b)',
+                    hover: 'var(--color-accent-hover, #374763)',
                 },
-                'app-bg': '#09090b',
-                'panel-bg': '#111115',
-                'card-bg': '#18181f',
+                accent: {
+                    DEFAULT: 'var(--color-accent, #29364b)',
+                    hover: 'var(--color-accent-hover, #374763)',
+                },
+                'app-bg': 'var(--bg-app, rgb(9 9 11))',
+                'panel-bg': 'var(--bg-panel, rgb(9 9 11))',
+                'card-bg': 'var(--bg-card, #14141a)',
                 secondary: '#a1a1aa',
                 muted: '#52525b',
             },
             fontFamily: {
-                sans: ['Google Sans', 'sans-serif'],
-                mono: ['Google Sans', 'monospace'],
-                serif: ['Google Sans', 'serif'],
+                sans: ['var(--font-ui)', 'sans-serif'],
+                mono: ['var(--font-mono)', 'monospace'],
             },
             borderRadius: {
-                'xl': '1rem',
-                '2xl': '1.5rem',
-                '3xl': '2rem',
+                'xs': 'var(--radius-xs, 0.25rem)',
+                'sm': 'var(--radius-sm, 0.375rem)',
+                'md': 'var(--radius-md, 0.5rem)',
+                'lg': 'var(--radius-lg, 0.5rem)',
+                'xl': 'var(--radius-xl, 0.5rem)',
+                '2xl': 'var(--radius-2xl, 0.5rem)',
+                '3xl': 'var(--radius-3xl, 0.75rem)',
             },
             boxShadow: {
-                'glow': '0 0 20px rgba(59, 130, 246, 0.35)',
-                'glow-accent': '0 0 20px rgba(37, 99, 235, 0.35)',
+                'glow': '0 0 20px var(--color-accent-glow, rgba(41, 54, 75, 0.45))',
+                'glow-accent': '0 0 20px var(--color-accent-glow, rgba(41, 54, 75, 0.45))',
                 '3xl': '0 35px 60px -15px rgba(0, 0, 0, 0.8)',
             }
         },

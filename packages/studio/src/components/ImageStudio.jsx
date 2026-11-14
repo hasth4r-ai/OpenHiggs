@@ -352,7 +352,7 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear }) {
                 <button
                   type="button"
                   onClick={handleDone}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-primary text-black rounded-xl text-xs font-black transition-all hover:scale-105"
+                  className="flex items-center gap-1 px-3 py-1.5 bg-primary text-black rounded-xl text-xs font-black transition-all hover:opacity-90"
                 >
                   ✓ Done ({count})
                 </button>
@@ -474,7 +474,7 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear }) {
               <button
                 type="button"
                 onClick={handleDone}
-                className="px-4 py-1.5 bg-primary text-black rounded-xl text-xs font-black transition-all hover:scale-105"
+                className="px-4 py-1.5 bg-primary text-black rounded-xl text-xs font-black transition-all hover:opacity-90"
               >
                 Use Selected
               </button>
@@ -872,7 +872,7 @@ export default function ImageStudio({ apiKey, onGenerationComplete, historyItems
                           e.stopPropagation();
                           downloadImage(entry.url, `kie-${entry.id || idx}.jpg`);
                         }}
-                        className="p-1.5 bg-primary rounded-lg text-black hover:scale-110 transition-transform"
+                        className="p-1.5 bg-primary rounded-lg text-black hover:opacity-90 transition-opacity"
                       >
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                           <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
@@ -910,7 +910,7 @@ export default function ImageStudio({ apiKey, onGenerationComplete, historyItems
                 const entry = history[activeHistoryIdx];
                 downloadImage(currentImageUrl, `kie-${entry?.id || "image"}.jpg`);
               }}
-              className="bg-primary text-black px-6 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-glow active:scale-95"
+              className="bg-primary text-black px-6 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-glow hover:opacity-90"
             >
               ↓ Download
             </button>
@@ -1158,7 +1158,7 @@ export default function ImageStudio({ apiKey, onGenerationComplete, historyItems
                   type="button"
                   onClick={handleGenerate}
                   disabled={!LOCAL_ENGINE_CONNECTED || generating}
-                  className="bg-primary text-black px-6 md:px-8 py-3 md:py-3.5 rounded-xl md:rounded-[1.5rem] font-black text-sm md:text-base hover:shadow-glow hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2.5 w-full sm:w-auto shadow-lg disabled:opacity-70 disabled:cursor-not-allowed disabled:scale-100"
+                  className="bg-primary text-black px-6 md:px-8 py-3 md:py-3.5 rounded-xl md:rounded-[1.5rem] font-black text-sm md:text-base hover:shadow-glow hover:opacity-90 transition-all flex items-center justify-center gap-2.5 w-full sm:w-auto shadow-lg disabled:opacity-70 disabled:cursor-not-allowed"
                 >
                   {generating ? (
                     <>

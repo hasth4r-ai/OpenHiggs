@@ -198,7 +198,7 @@ function HistoryThumb({ entry, isActive, onSelect, onDownload }) {
                 <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); onDownload(entry); }}
-                    className="p-1.5 bg-primary rounded-lg text-black hover:scale-110 transition-transform"
+                    className="p-1.5 bg-primary rounded-lg text-black hover:opacity-90 transition-opacity"
                     title="Download"
                 >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
@@ -739,7 +739,7 @@ export default function LipSyncStudio({ apiKey, onGenerationComplete, historyIte
                                     type="button"
                                     onClick={handleGenerate}
                                     disabled={!LOCAL_ENGINE_CONNECTED || isGenerating}
-                                    className="ml-auto px-6 py-2.5 bg-primary text-black font-black text-sm rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-glow disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                                    className="ml-auto px-6 py-2.5 bg-primary text-black font-black text-sm rounded-2xl hover:opacity-90 transition-all shadow-glow disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {isGenerating ? (
                                         <><span className="animate-spin inline-block mr-2 text-black">◌</span>Generating...</>
@@ -784,7 +784,7 @@ export default function LipSyncStudio({ apiKey, onGenerationComplete, historyIte
                                 const entry = history.find((e) => e.url === activeResultUrl);
                                 downloadFile(activeResultUrl, `lipsync-${entry?.id ?? 'clip'}.mp4`);
                             }}
-                            className="bg-primary text-black px-6 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-glow active:scale-95"
+                            className="bg-primary text-black px-6 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-glow hover:opacity-90"
                         >
                             ↓ Download
                         </button>

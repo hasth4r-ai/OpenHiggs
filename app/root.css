@@ -1,0 +1,46 @@
+:root {
+  /* Typography */
+  --font-ui: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'Google Sans', monospace;
+
+  /* Accent Color (#29364b) */
+  --color-accent: #29364b;
+  --color-accent-hover: #374763;
+  --color-accent-active: #1f2a3a;
+  --color-accent-glow: rgba(41, 54, 75, 0.45);
+  --color-accent-subtle: rgba(41, 54, 75, 0.18);
+  --color-accent-border: rgba(41, 54, 75, 0.5);
+
+  /* Primary (mapped to accent) */
+  --color-primary: var(--color-accent);
+  --color-primary-hover: var(--color-accent-hover);
+
+  /* Surfaces & Backgrounds */
+  --bg-app: rgb(9 9 11);
+  --bg-panel: rgb(9 9 11);
+  --bg-header: #0d0d12;
+  --bg-card: #14141a;
+  --bg-card-subtle: #181822;
+  --bg-card-active: #20202c;
+  --bg-input: #121217;
+  --bg-hover: rgba(255, 255, 255, 0.06);
+
+  /* Border Radius (0.5rem as requested) */
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.5rem;
+  --radius-2xl: 0.5rem;
+  --radius-3xl: 0.75rem;
+
+  /* Dimensions */
+  --studio-sidebar-width: 380px;
+  --studio-tab-height: 48px;
+  --header-height: 52px;
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-normal: 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-tab: 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}

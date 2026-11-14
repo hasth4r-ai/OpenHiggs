@@ -281,7 +281,7 @@ function ScrollColumn({ title, items, columnKey, value, onChange }) {
             <div className="mb-3 text-[9px] font-black text-white/40 uppercase tracking-[0.2em] text-center">
                 {title}
             </div>
-            <div className="relative overflow-hidden w-full h-[40vh] md:h-[320px] bg-[#1a1a1a]/80 rounded-[2rem] border border-white/5 shadow-2xl backdrop-blur-xl transition-transform duration-300 hover:scale-[1.02] hover:border-white/10">
+            <div className="relative overflow-hidden w-full h-[40vh] md:h-[320px] bg-[#1a1a1a]/80 rounded-[2rem] border border-white/5 shadow-2xl backdrop-blur-xl transition-colors duration-300 hover:border-white/10">
                 {/* Top mask */}
                 <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-[#1a1a1a] via-[#1a1a1a]/80 to-transparent z-20 pointer-events-none rounded-t-[2rem]" />
                 {/* Bottom mask */}
@@ -636,7 +636,7 @@ export default function CinemaStudio({ apiKey, onGenerationComplete, historyItem
                     </button>
                     <button
                         onClick={handleDownload}
-                        className="bg-blue-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wide hover:bg-blue-500 transition-all shadow-lg shadow-blue-500/25 hover:scale-105 active:scale-95"
+                        className="bg-[var(--color-accent)] text-white px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wide hover:opacity-90 transition-all shadow-md"
                     >
                         ↓ Download
                     </button>

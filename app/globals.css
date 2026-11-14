@@ -1,3 +1,5 @@
+@import './root.css';
+
 @font-face { font-family: 'Google Sans'; font-style: normal; font-weight: 400; font-display: block; src: url('/fonts/google-sans-400.ttf') format('truetype'); }
 @font-face { font-family: 'Google Sans'; font-style: normal; font-weight: 500; font-display: block; src: url('/fonts/google-sans-500.ttf') format('truetype'); }
 @font-face { font-family: 'Google Sans'; font-style: normal; font-weight: 600; font-display: block; src: url('/fonts/google-sans-600.ttf') format('truetype'); }
@@ -14,31 +16,31 @@
 }
 
 body {
-  background: #09090b;
+  background: var(--bg-app, rgb(9 9 11));
   color: #f4f4f5;
   font-family: var(--font-ui);
   letter-spacing: -0.015em;
   -webkit-font-smoothing: antialiased;
 }
 
-:root {
-  --font-ui: 'Google Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-  --studio-sidebar-width: 380px;
-  --studio-tab-height: 52px;
-  --transition-tab: 200ms cubic-bezier(0.16, 1, 0.3, 1);
-  --color-primary: #3b82f6; /* Electric Blue Accent */
-  --color-primary-hover: #2563eb;
-  --bg-app: #09090b;
-  --bg-panel: #111115;
-  --bg-card: #18181f;
-  --border-color: transparent;
-  --border-radius-xl: 1rem;
+/* User Explicit Class Overrides */
+.rounded-2xl {
+  border-radius: var(--radius-2xl, 0.5rem) !important;
+}
+
+.rounded-xl {
+  border-radius: var(--radius-xl, 0.5rem) !important;
+}
+
+.bg-\[\#111115\], .bg-\[\#121217\], .bg-\[\#0f0f14\] {
+  --tw-bg-opacity: 1 !important;
+  background-color: var(--bg-panel, rgb(9 9 11)) !important;
 }
 
 .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(59,130,246,0.4); }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--color-accent-hover, #374763); }
 
 /* Animations */
 @keyframes fade-in {
@@ -52,8 +54,8 @@ body {
 }
 
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 15px rgba(59, 130, 246, 0.3); }
-  50% { box-shadow: 0 0 30px rgba(59, 130, 246, 0.6); }
+  0%, 100% { box-shadow: 0 0 15px var(--color-accent-glow); }
+  50% { box-shadow: 0 0 30px var(--color-accent-glow); }
 }
 
 @keyframes shimmer {
@@ -65,27 +67,20 @@ body {
 .animate-scale-in { animation: scale-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 .animate-pulse-glow { animation: pulse-glow 2.5s infinite ease-in-out; }
 
-/* Interactive object hover micro-animations */
+/* Interactive object hover styling - clean, professional, no jumpy scales */
 .interactive-hover {
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease, box-shadow 0.2s ease;
-}
-.interactive-hover:hover {
-  transform: translateY(-1px);
-}
-.interactive-hover:active {
-  transform: translateY(0) scale(0.98);
+  transition: background-color var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast), border-color var(--transition-fast);
 }
 
 /* Upload dropzone dotted border styling */
 .upload-dropzone {
-  border: 2px dashed rgba(59, 130, 246, 0.3);
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 2px dashed var(--color-accent-border, rgba(41, 54, 75, 0.5));
+  transition: border-color var(--transition-fast), background-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 .upload-dropzone:hover, .upload-dropzone-active {
-  border-color: #3b82f6;
-  background-color: rgba(59, 130, 246, 0.06);
-  box-shadow: 0 0 25px -5px rgba(59, 130, 246, 0.25);
-  transform: scale(1.005);
+  border-color: var(--color-accent, #29364b);
+  background-color: var(--color-accent-subtle, rgba(41, 54, 75, 0.18));
+  box-shadow: 0 0 20px -3px var(--color-accent-glow, rgba(41, 54, 75, 0.45));
 }
 
 .studio-tab-panel {
@@ -110,27 +105,26 @@ html, body, button, input, textarea, select, option, pre, code, kbd, samp,
   display: flex; 
   align-items: center; 
   gap: 4px; 
-  padding: 8px 12px; 
-  background: #111115; 
+  padding: 6px 10px; 
+  background: var(--bg-panel, rgb(9 9 11)); 
 }
 .studio-workflow-tabs button { 
   flex: 1; 
   min-width: 0; 
-  padding: 8px 0; 
+  padding: 7px 0; 
   font-size: 12px; 
   line-height: 16px; 
   font-weight: 600; 
-  border-radius: 10px; 
-  color: rgb(255 255 255 / .5); 
+  border-radius: var(--radius-md, 0.5rem); 
+  color: rgb(255 255 255 / .6); 
   transition: all var(--transition-tab); 
 }
 .studio-workflow-tabs button:hover { 
   color: white; 
-  background: rgb(255 255 255 / .06); 
-  transform: translateY(-0.5px);
+  background: var(--bg-hover); 
 }
 .studio-workflow-tabs button[aria-pressed="true"] { 
   color: #fff; 
-  background: #3b82f6; 
-  box-shadow: 0 0 15px rgba(59, 130, 246, 0.35);
+  background: var(--color-accent, #29364b); 
+  box-shadow: 0 0 14px var(--color-accent-glow);
 }
