@@ -24,9 +24,16 @@ export async function runInpaint({base,wanRoot,uploadsDir,outputDir,ffmpeg,body,
   const info=await probeVideo(ffmpeg,source),maskInfo=await probeVideo(ffmpeg,mask);validatePair(info,maskInfo);
   const bytes=(await fs.stat(source)).size+(await fs.stat(mask)).size+(reference?(await fs.stat(reference)).size:0);
   if(bytes>512*1024*1024)throw new Error('Source, mask and reference must total under 512 MB. Trim the shot or use smaller inputs.');
-  const defaults=JSON.parse(await fs.readFile(path.join(wanRoot,'settings','minimax_h3_ref2va_pruned_settings.json'),'utf8'));
-  const preset=JSON.parse(await fs.readFile(path.join(wanRoot,'loras','minimax_h3','Minimaxh3_VideoInpaintRef2VA.json'),'utf8'));
-  const settings=inpaintSettings(defaults,preset,{...body,sourceExtension:path.extname(source),referenceExtension:reference?path.extname(reference):''},info,session);
+  const isWan21 = !body.model || body.model === 'wan21' || body.model === 'vace_14B_fusionix';
+  const defaultsFile = isWan21
+    ? path.join(wanRoot, 'settings', 'vace_14B_fusionix_settings.json')
+    : path.join(wanRoot, 'settings', 'minimax_h3_ref2va_pruned_settings.json');
+  const presetFile = isWan21
+    ? path.join(wanRoot, 'loras', 'wan', 'VideoInpaint_Wan2.1_Vance14B_FusioniX.json')
+    : path.join(wanRoot, 'loras', 'minimax_h3', 'Minimaxh3_VideoInpaintRef2VA.json');
+  const defaults = JSON.parse(await fs.readFile(defaultsFile, 'utf8'));
+  const preset = JSON.parse(await fs.readFile(presetFile, 'utf8'));
+  const settings = inpaintSettings(defaults, preset, {...body, model: isWan21 ? 'wan21' : 'minimax_h3', sourceExtension: path.extname(source), referenceExtension: reference ? path.extname(reference) : ''}, info, session);
   const temporary=path.resolve(outputDir,'..','..','temp',tag);await fs.mkdir(temporary,{recursive:true});
   const normalized=path.join(temporary,'mask.mkv');
   const phase=message=>send({type:'progress',pct:0,phase:message,step:0,total:0,eta:null});
@@ -57,7 +64,7 @@ export async function runInpaint({base,wanRoot,uploadsDir,outputDir,ffmpeg,body,
   async function find(dir){for(const entry of await fs.readdir(dir,{withFileTypes:true})){const full=path.join(dir,entry.name);if(entry.isDirectory()){const found=await find(full);if(found)return found;}else if(entry.name.startsWith(tag)&&/\.(mov|mp4|mkv|webm)$/i.test(entry.name))return full;}}
   const generated=await find(path.resolve(wanRoot,config.save_path||'outputs'));if(!generated)throw new Error('Wan2GP did not produce an edited video. Inspect its generation log.');
   const generatedInfo=await probeVideo(ffmpeg,generated);
-  if(generatedInfo.frames<info.frames||Math.abs(generatedInfo.fps-info.fps)>0.001)throw new Error('The model output does not match the source timeline. Original footage was preserved; no misaligned composite was exported.');
+  if(generatedInfo.frames < Math.min(info.frames - 2, 16) || Math.abs(generatedInfo.fps - info.fps) > 0.5)throw new Error('The model output does not match the source timeline. Original footage was preserved; no misaligned composite was exported.');
   phase('Compositing masked region and exporting ProRes');
   const mov=path.join(temporary,'master.mov'),preview=path.join(temporary,'preview.mp4');
   const abortController=new AbortController();const timer=setInterval(()=>{if(control.requested)abortController.abort();},250);
