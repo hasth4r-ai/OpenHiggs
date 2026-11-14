@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { getInstallRoot } from '../../../local-hosting/root.mjs';
 
 export async function POST(request) {
   try {
@@ -13,7 +14,7 @@ export async function POST(request) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    const uploadsDir = path.resolve(process.cwd(), '..', 'data', 'uploads');
+    const uploadsDir = path.resolve(getInstallRoot(), 'data', 'uploads');
     await fs.mkdir(uploadsDir, { recursive: true });
 
     const rawName = path.basename(file.name || 'upload.bin');

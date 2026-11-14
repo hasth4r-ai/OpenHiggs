@@ -2,11 +2,12 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 import {uploadedPath,makeInputPreview} from '../../../../local-hosting/inpaint-media.mjs';
+import {getInstallRoot} from '../../../../local-hosting/root.mjs';
 export const runtime='nodejs';
 const jobs=globalThis.inpaintPreviewJobs??=new Map();
 export async function POST(request) {
   try {
-    const {url}=await request.json(),root=path.resolve(process.cwd(),'..'),uploads=path.join(root,'data','uploads');
+    const {url}=await request.json(),root=getInstallRoot(),uploads=path.join(root,'data','uploads');
     const input=await uploadedPath(uploads,url),stat=await fs.stat(input);
     const name='preview_'+createHash('sha256').update(input+stat.size+stat.mtimeMs).digest('hex').slice(0,24)+'.mp4',output=path.join(uploads,name);
     try {await fs.access(output);}catch {

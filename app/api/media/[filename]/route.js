@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import fs from 'node:fs';
 import path from 'node:path';
+import { getInstallRoot } from '../../../../local-hosting/root.mjs';
 
 const MIME_TYPES = {
   '.png': 'image/png',
@@ -25,7 +26,7 @@ export async function GET(request, { params }) {
     }
 
     const safeName = path.basename(decodeURIComponent(filename));
-    const uploadsDir = path.resolve(process.cwd(), '..', 'data', 'uploads');
+    const uploadsDir = path.resolve(getInstallRoot(), 'data', 'uploads');
     const filePath = path.join(uploadsDir, safeName);
 
     if (!fs.existsSync(filePath)) {

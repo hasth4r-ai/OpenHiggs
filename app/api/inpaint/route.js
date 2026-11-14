@@ -4,6 +4,7 @@ import path from 'node:path';
 import { runInpaint } from '../../../local-hosting/inpaint-engine.mjs';
 import {randomUUID} from 'node:crypto';
 import {saveGeneration,runId,activeTasks} from '../../../local-hosting/generation-history.mjs';
+import {getInstallRoot} from '../../../local-hosting/root.mjs';
 
 export const runtime = 'nodejs';
 let active = false;
@@ -23,7 +24,7 @@ export async function POST(request) {
     start(controller) {
       const encoder=new TextEncoder();
       const send=data=>{if(connected) try{controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));}catch{connected=false;}};
-      const root=path.resolve(process.cwd(),'..');
+      const root=getInstallRoot();
       const logPath=path.join(root,'logs',`generation_${Date.now()}.jsonl`);
       let writes=Promise.resolve();
       let historyWrites=Promise.resolve();

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import fs from 'node:fs';
 import path from 'node:path';
+import { getInstallRoot } from '../../../../local-hosting/root.mjs';
 
 const MIME_TYPES = {
   '.mp4': 'video/mp4',
@@ -19,7 +20,7 @@ export async function GET(request, { params }) {
     }
 
     const safeName = path.basename(decodeURIComponent(filename));
-    const genDir = path.resolve(process.cwd(), '..', 'data', 'generations');
+    const genDir = path.resolve(getInstallRoot(), 'data', 'generations');
     const filePath = path.join(genDir, safeName);
 
     if (!fs.existsSync(filePath)) {
