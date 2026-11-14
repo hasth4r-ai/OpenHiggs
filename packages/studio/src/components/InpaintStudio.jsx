@@ -3,7 +3,7 @@ import {useState,useEffect} from 'react';
 import VideoWorkflowTabs from './VideoWorkflowTabs.jsx';
 import {processingSize} from '../inpaintResolution.mjs';
 import GenerationHistory from './GenerationHistory.jsx';
-const defaults={processingResolution:'720',mode:'remove',source:'',mask:'',reference:'',prompt:'',profile:'422hq',denoise:1,expand:0,feather:2,invert:false,keepAudio:true};
+const defaults={processingResolution:'720',mode:'remove',source:'',mask:'',reference:'',prompt:'',profile:'422hq',denoise:0.85,expand:16,feather:4,invert:false,keepAudio:true};
 export default function InpaintStudio({onNavigate,initialDraft,blocked=false}) {
   const [form,setForm]=useState({...defaults,...initialDraft}),[names,setNames]=useState({}),[info,setInfo]=useState(null);
   const [uploading,setUploading]=useState(''),[error,setError]=useState(''),[status,setStatus]=useState(''),[generating,setGenerating]=useState(false),[busy,setBusy]=useState(false),[refresh,setRefresh]=useState(0);
