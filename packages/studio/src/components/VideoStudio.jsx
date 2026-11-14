@@ -21,35 +21,35 @@ const CAMERA_PRESETS = [
     name: 'GENERAL',
     subtitle: 'MiniMax H3',
     description: 'Manual creative control with natural references & prompts.',
-    icon: <ClapperboardIcon className="w-5 h-5 text-blue-400" />,
+    icon: <ClapperboardIcon className="w-5 h-5 text-[var(--color-accent-text)]" />,
   },
   {
     id: 'tracking',
     name: 'TRACKING',
     subtitle: 'Camera Move',
     description: 'Smooth low-angle tracking shot following the subject.',
-    icon: <TrackingIcon className="w-5 h-5 text-blue-400" />,
+    icon: <TrackingIcon className="w-5 h-5 text-[var(--color-accent-text)]" />,
   },
   {
     id: 'push_in',
     name: 'PUSH IN',
     subtitle: 'Dramatic Focus',
     description: 'Slow, cinematic zoom in toward the character.',
-    icon: <ZoomInIcon className="w-5 h-5 text-blue-400" />,
+    icon: <ZoomInIcon className="w-5 h-5 text-[var(--color-accent-text)]" />,
   },
   {
     id: 'orbit',
     name: 'ORBIT',
     subtitle: '360° Arc',
     description: 'Controlled semicircular camera orbit around the focal point.',
-    icon: <OrbitIcon className="w-5 h-5 text-blue-400" />,
+    icon: <OrbitIcon className="w-5 h-5 text-[var(--color-accent-text)]" />,
   },
   {
     id: 'drone',
     name: 'DRONE / AERIAL',
     subtitle: 'Landscape Sweep',
     description: 'Expansive forward gliding sweep across the environment.',
-    icon: <DroneIcon className="w-5 h-5 text-blue-400" />,
+    icon: <DroneIcon className="w-5 h-5 text-[var(--color-accent-text)]" />,
   },
 ];
 
@@ -411,7 +411,7 @@ export default function VideoStudio({ apiKey }) {
                 {activePreset.icon}
               </div>
               <div className="flex flex-col">
-                <span className="text-xs font-black text-blue-400 tracking-wider uppercase">
+                <span className="text-xs font-black text-[var(--color-accent-text)] tracking-wider uppercase">
                   {activePreset.name}
                 </span>
                 <span className="text-[11px] text-white/60 font-medium">
@@ -424,7 +424,7 @@ export default function VideoStudio({ apiKey }) {
               onClick={() => setShowPresetModal(true)}
               className="text-xs font-semibold text-white/80 hover:text-white bg-white/5 hover:bg-white/10 px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer interactive-hover"
             >
-              <EditPencilIcon className="w-3.5 h-3.5 text-blue-400" />
+              <EditPencilIcon className="w-3.5 h-3.5 text-[var(--color-accent-text)]" />
               <span>Change</span>
             </button>
           </div>
@@ -440,7 +440,7 @@ export default function VideoStudio({ apiKey }) {
                   : 'text-white/50 hover:text-white'
               }`}
             >
-              <LayersIcon className="w-3.5 h-3.5 text-blue-400" />
+              <LayersIcon className="w-3.5 h-3.5 text-[var(--color-accent-text)]" />
               <span>References</span>
             </button>
             <button
@@ -477,7 +477,7 @@ export default function VideoStudio({ apiKey }) {
                   handleUploadFiles(e.dataTransfer.files);
                 }}
                 className={`upload-dropzone rounded-2xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all ${
-                  isDragOver ? 'border-blue-500 bg-blue-500/10 ring-2 ring-blue-500/30' : ''
+                  isDragOver ? 'border-[var(--color-accent-border)] bg-[var(--color-accent-subtle)] ring-2 ring-[var(--color-accent-glow)]' : ''
                 }`}
                 onClick={() => imageInputRef.current?.click()}
               >
@@ -512,21 +512,21 @@ export default function VideoStudio({ apiKey }) {
                   <div 
                     title="Add Image Reference"
                     onClick={(e) => { e.stopPropagation(); imageInputRef.current?.click(); }}
-                    className="w-9 h-9 rounded-full bg-white/5 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-white/80 cursor-pointer"
+                    className="w-9 h-9 rounded-full bg-white/5 hover:bg-[var(--color-accent)] hover:text-white transition-all flex items-center justify-center text-white/80 cursor-pointer"
                   >
                     <ImageIcon className="w-4 h-4" />
                   </div>
                   <div 
                     title="Add Video Reference"
                     onClick={(e) => { e.stopPropagation(); videoInputRef.current?.click(); }}
-                    className="w-9 h-9 rounded-full bg-white/5 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-white/80 cursor-pointer"
+                    className="w-9 h-9 rounded-full bg-white/5 hover:bg-[var(--color-accent)] hover:text-white transition-all flex items-center justify-center text-white/80 cursor-pointer"
                   >
                     <VideoCameraIcon className="w-4 h-4" />
                   </div>
                   <div 
                     title="Add Audio Reference"
                     onClick={(e) => { e.stopPropagation(); audioInputRef.current?.click(); }}
-                    className="w-9 h-9 rounded-full bg-white/5 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-white/80 cursor-pointer"
+                    className="w-9 h-9 rounded-full bg-white/5 hover:bg-[var(--color-accent)] hover:text-white transition-all flex items-center justify-center text-white/80 cursor-pointer"
                   >
                     <MicrophoneIcon className="w-4 h-4" />
                   </div>
@@ -539,7 +539,7 @@ export default function VideoStudio({ apiKey }) {
                   <span className="text-[10px] text-white/50 block mt-0.5">
                     Up to 9 images, 3 videos, and 3 audio files
                   </span>
-                  <span className="text-[9px] text-blue-400/90 font-mono block mt-1">
+                  <span className="text-[9px] text-[var(--color-accent-text)] font-mono block mt-1">
                     Drop files here or Paste from Clipboard (<kbd>Ctrl+V</kbd>)
                   </span>
                 </div>
@@ -567,7 +567,7 @@ export default function VideoStudio({ apiKey }) {
                             {ref.type === 'video' ? (
                               <video src={ref.url} className="w-full h-full object-cover" muted />
                             ) : ref.type === 'audio' ? (
-                              <MicrophoneIcon className="w-4 h-4 text-blue-400" />
+                              <MicrophoneIcon className="w-4 h-4 text-[var(--color-accent-text)]" />
                             ) : (
                               <img src={ref.url} alt="" className="w-full h-full object-cover" />
                             )}
@@ -576,7 +576,7 @@ export default function VideoStudio({ apiKey }) {
                             type="button"
                             onClick={() => insertTagIntoPrompt(ref.tag)}
                             title={`Click to insert ${ref.tag} into prompt`}
-                            className="text-xs font-mono font-bold text-blue-400 hover:underline flex-shrink-0"
+                            className="text-xs font-mono font-bold text-[var(--color-accent-text)] hover:underline flex-shrink-0"
                           >
                             {ref.tag}
                           </button>
@@ -586,7 +586,7 @@ export default function VideoStudio({ apiKey }) {
                           <select
                             value={ref.role}
                             onChange={(e) => updateReferenceRole(ref.id, e.target.value)}
-                            className="bg-[#18181f] text-[10px] text-white/80 rounded-md px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="bg-[#18181f] text-[10px] text-white/80 rounded-md px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
                           >
                             {ref.type === 'video' ? (
                               <>
@@ -630,10 +630,10 @@ export default function VideoStudio({ apiKey }) {
               {/* Mode Description banner */}
               <div className="flex items-center justify-between px-1">
                 <div className="flex items-center gap-1.5">
-                  <FilmFrameIcon className="w-3.5 h-3.5 text-blue-400" />
+                  <FilmFrameIcon className="w-3.5 h-3.5 text-[var(--color-accent-text)]" />
                   <span className="text-[11px] font-bold text-white/80">Keyframe Animation</span>
                 </div>
-                <span className="text-[10px] font-mono text-blue-400 font-semibold">Start → End</span>
+                <span className="text-[10px] font-mono text-[var(--color-accent-text)] font-semibold">Start → End</span>
               </div>
 
               {/* Two Frames Grid */}
@@ -644,7 +644,7 @@ export default function VideoStudio({ apiKey }) {
                     <span className="text-[11px] font-bold text-white uppercase tracking-wider">
                       First Frame
                     </span>
-                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 font-semibold">
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[var(--color-accent-subtle)] text-[var(--color-accent-text)] font-semibold">
                       Start
                     </span>
                   </div>
@@ -673,7 +673,7 @@ export default function VideoStudio({ apiKey }) {
                           type="button"
                           onClick={() => firstFrameInputRef.current?.click()}
                           title="Replace First Frame"
-                          className="w-8 h-8 rounded-xl bg-white/20 hover:bg-blue-600 text-white flex items-center justify-center transition-all interactive-hover"
+                          className="w-8 h-8 rounded-xl bg-white/20 hover:bg-[var(--color-accent)] text-white flex items-center justify-center transition-all interactive-hover"
                         >
                           <RefreshIcon className="w-4 h-4" />
                         </button>
@@ -688,7 +688,7 @@ export default function VideoStudio({ apiKey }) {
                       </div>
                       {/* Label chip */}
                       <div className="absolute bottom-1.5 left-1.5 right-1.5 flex items-center justify-between pointer-events-none">
-                        <span className="text-[9px] font-mono font-bold bg-black/80 backdrop-blur px-1.5 py-0.5 rounded text-blue-400 truncate max-w-[110px]">
+                        <span className="text-[9px] font-mono font-bold bg-black/80 backdrop-blur px-1.5 py-0.5 rounded text-[var(--color-accent-text)] truncate max-w-[110px]">
                           {firstFrame.name}
                         </span>
                       </div>
@@ -701,9 +701,9 @@ export default function VideoStudio({ apiKey }) {
                         if (e.dataTransfer.files?.[0]) handleUploadFrame(e.dataTransfer.files[0], 'keyframe_start');
                       }}
                       onClick={() => firstFrameInputRef.current?.click()}
-                      className="upload-dropzone rounded-2xl p-3 flex flex-col items-center justify-center text-center cursor-pointer aspect-[4/3] transition-all hover:bg-blue-500/5 group"
+                      className="upload-dropzone rounded-2xl p-3 flex flex-col items-center justify-center text-center cursor-pointer aspect-[4/3] transition-all hover:bg-[var(--color-accent-subtle)] group"
                     >
-                      <div className="w-8 h-8 rounded-full bg-blue-500/10 group-hover:bg-blue-600 text-blue-400 group-hover:text-white flex items-center justify-center mb-1 transition-all">
+                      <div className="w-8 h-8 rounded-full bg-[var(--color-accent-subtle)] group-hover:bg-[var(--color-accent)] text-[var(--color-accent-text)] group-hover:text-white flex items-center justify-center mb-1 transition-all">
                         <PlusIcon className="w-4 h-4" />
                       </div>
                       <span className="text-xs font-bold text-white/90 block leading-tight">
@@ -751,7 +751,7 @@ export default function VideoStudio({ apiKey }) {
                           type="button"
                           onClick={() => lastFrameInputRef.current?.click()}
                           title="Replace Last Frame"
-                          className="w-8 h-8 rounded-xl bg-white/20 hover:bg-blue-600 text-white flex items-center justify-center transition-all interactive-hover"
+                          className="w-8 h-8 rounded-xl bg-white/20 hover:bg-[var(--color-accent)] text-white flex items-center justify-center transition-all interactive-hover"
                         >
                           <RefreshIcon className="w-4 h-4" />
                         </button>
@@ -766,7 +766,7 @@ export default function VideoStudio({ apiKey }) {
                       </div>
                       {/* Label chip */}
                       <div className="absolute bottom-1.5 left-1.5 right-1.5 flex items-center justify-between pointer-events-none">
-                        <span className="text-[9px] font-mono font-bold bg-black/80 backdrop-blur px-1.5 py-0.5 rounded text-blue-400 truncate max-w-[110px]">
+                        <span className="text-[9px] font-mono font-bold bg-black/80 backdrop-blur px-1.5 py-0.5 rounded text-[var(--color-accent-text)] truncate max-w-[110px]">
                           {lastFrame.name}
                         </span>
                       </div>
@@ -779,9 +779,9 @@ export default function VideoStudio({ apiKey }) {
                         if (e.dataTransfer.files?.[0]) handleUploadFrame(e.dataTransfer.files[0], 'keyframe_end');
                       }}
                       onClick={() => lastFrameInputRef.current?.click()}
-                      className="upload-dropzone rounded-2xl p-3 flex flex-col items-center justify-center text-center cursor-pointer aspect-[4/3] transition-all hover:bg-blue-500/5 group"
+                      className="upload-dropzone rounded-2xl p-3 flex flex-col items-center justify-center text-center cursor-pointer aspect-[4/3] transition-all hover:bg-[var(--color-accent-subtle)] group"
                     >
-                      <div className="w-8 h-8 rounded-full bg-white/5 group-hover:bg-blue-600 text-white/50 group-hover:text-white flex items-center justify-center mb-1 transition-all">
+                      <div className="w-8 h-8 rounded-full bg-white/5 group-hover:bg-[var(--color-accent)] text-white/50 group-hover:text-white flex items-center justify-center mb-1 transition-all">
                         <PlusIcon className="w-4 h-4" />
                       </div>
                       <span className="text-xs font-bold text-white/70 block leading-tight">
@@ -797,7 +797,7 @@ export default function VideoStudio({ apiKey }) {
 
               {/* Interpolation Guidance Note */}
               <div className="bg-[#18181f] rounded-xl p-2.5 flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0 text-blue-400">
+                <div className="w-6 h-6 rounded-lg bg-[var(--color-accent-subtle)] flex items-center justify-center flex-shrink-0 text-[var(--color-accent-text)]">
                   <ArrowRightIcon className="w-3.5 h-3.5" />
                 </div>
                 <span className="text-[11px] text-white/60 leading-tight">
@@ -820,7 +820,7 @@ export default function VideoStudio({ apiKey }) {
               <button
                 type="button"
                 onClick={() => setShowCompiledPrompt(s => !s)}
-                className="text-[10px] text-blue-400 hover:underline font-mono"
+                className="text-[10px] text-[var(--color-accent-text)] hover:underline font-mono"
               >
                 {showCompiledPrompt ? 'Hide H3 Syntax ▲' : 'Inspect H3 Syntax ▼'}
               </button>
@@ -833,7 +833,7 @@ export default function VideoStudio({ apiKey }) {
                 onChange={(e) => setPrompt(e.target.value)}
                 rows={4}
                 placeholder="Describe the video. Refer to inputs as Image 1, Video 1, or Audio 1. Add elements using @"
-                className="w-full bg-[#18181f] rounded-2xl p-3 text-xs md:text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/40 resize-none custom-scrollbar leading-relaxed transition-all"
+                className="w-full bg-[#18181f] rounded-2xl p-3 text-xs md:text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-glow)] resize-none custom-scrollbar leading-relaxed transition-all"
               />
 
               {/* @ Elements Quick Button */}
@@ -865,7 +865,7 @@ export default function VideoStudio({ apiKey }) {
                             onClick={() => insertTagIntoPrompt(r.tag)}
                             className="flex items-center justify-between p-1.5 rounded-lg hover:bg-white/10 text-left text-xs transition-colors"
                           >
-                            <span className="font-mono font-bold text-blue-400">{r.tag}</span>
+                            <span className="font-mono font-bold text-[var(--color-accent-text)]">{r.tag}</span>
                             <span className="text-[10px] text-white/60 truncate max-w-[100px]">{r.name}</span>
                           </button>
                         ))
@@ -883,7 +883,7 @@ export default function VideoStudio({ apiKey }) {
             {/* Compiled H3 Ref2VA Preview Drawer */}
             {showCompiledPrompt && (
               <div className="mt-2 bg-[#111115] rounded-xl p-2.5 flex flex-col gap-1 text-[10px] font-mono animate-fade-in">
-                <div className="flex items-center justify-between text-blue-400 font-bold pb-1">
+                <div className="flex items-center justify-between text-[var(--color-accent-text)] font-bold pb-1">
                   <span>Compiled MiniMax H3 Ref2VA</span>
                   <span className="text-[9px] text-white/40">Zero empty lines</span>
                 </div>
@@ -899,9 +899,9 @@ export default function VideoStudio({ apiKey }) {
             {/* Model Row */}
             <div className="flex items-center justify-between bg-[#18181f] p-2.5 rounded-xl">
               <span className="text-xs font-bold text-white/60">Model</span>
-              <span className="text-xs font-black text-blue-400 flex items-center gap-1.5">
+              <span className="text-xs font-black text-[var(--color-accent-text)] flex items-center gap-1.5">
                 <span>MiniMax H3</span>
-                <SparkleIcon className="w-3.5 h-3.5 text-blue-400" />
+                <SparkleIcon className="w-3.5 h-3.5 text-[var(--color-accent-text)]" />
               </span>
             </div>
 
@@ -1023,13 +1023,13 @@ export default function VideoStudio({ apiKey }) {
                   }}
                   className={`p-3 rounded-2xl text-left flex items-center gap-3.5 transition-all ${
                     activePreset.id === preset.id
-                      ? 'bg-blue-600/15 ring-2 ring-blue-500/60 text-white'
+                      ? 'bg-[var(--color-accent-subtle)] ring-2 ring-[var(--color-accent)] text-white'
                       : 'bg-[#18181f] hover:bg-[#22222b] text-white/80'
                   }`}
                 >
                   <div className="flex-shrink-0">{preset.icon}</div>
                   <div className="flex flex-col">
-                    <span className="text-xs font-black text-blue-400">{preset.name}</span>
+                    <span className="text-xs font-black text-[var(--color-accent-text)]">{preset.name}</span>
                     <span className="text-[11px] text-white/60">{preset.description}</span>
                   </div>
                 </button>

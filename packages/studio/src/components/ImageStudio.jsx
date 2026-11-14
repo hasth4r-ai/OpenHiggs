@@ -543,7 +543,7 @@ function ModelDropdown({ models, selectedModel, onSelect, onClose }) {
               <div
                 className={`w-10 h-10 ${
                   m.family === "kontext"
-                    ? "bg-blue-500/10 text-blue-400"
+                    ? "bg-[var(--color-accent-subtle)] text-[var(--color-accent-text)]"
                     : m.family === "effects"
                     ? "bg-purple-500/10 text-purple-400"
                     : "bg-primary/10 text-primary"

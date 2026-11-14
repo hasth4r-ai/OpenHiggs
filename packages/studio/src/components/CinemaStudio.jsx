@@ -736,7 +736,7 @@ export default function CinemaStudio({ apiKey, onGenerationComplete, historyItem
 
                         {/* Generate Button */}
                         <button
-                            className="h-[56px] px-8 bg-blue-600 text-white rounded-xl font-bold text-xs uppercase hover:bg-blue-500 transition-all shadow-lg shadow-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="h-[56px] px-8 bg-[var(--color-accent)] text-white rounded-xl font-bold text-xs uppercase hover:opacity-90 transition-all shadow-lg shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                             disabled={!LOCAL_ENGINE_CONNECTED || isGenerating || !settings.prompt.trim()}
                             onClick={handleGenerate}
                         >
@@ -755,7 +755,7 @@ export default function CinemaStudio({ apiKey, onGenerationComplete, historyItem
                     {history.map((entry, idx) => (
                         <div
                             key={entry.timestamp ?? idx}
-                            className={`relative group/thumb cursor-pointer rounded-lg overflow-hidden transition-all duration-300 aspect-square ${idx === activeHistoryIndex ? 'ring-2 ring-blue-500 shadow-md shadow-blue-500/30' : 'opacity-80 hover:opacity-100'}`}
+                            className={`relative group/thumb cursor-pointer rounded-lg overflow-hidden transition-all duration-300 aspect-square ${idx === activeHistoryIndex ? 'ring-2 ring-[var(--color-accent)] shadow-md shadow-md' : 'opacity-80 hover:opacity-100'}`}
                             onClick={() => loadHistoryItem(entry, idx)}
                         >
                             <img

@@ -23,7 +23,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* User Explicit Class Overrides */
+/* User Explicit Class Overrides - Fully driven by root.css */
 .rounded-2xl {
   border-radius: var(--radius-2xl, 0.5rem) !important;
 }
@@ -35,6 +35,32 @@ body {
 .bg-\[\#111115\], .bg-\[\#121217\], .bg-\[\#0f0f14\] {
   --tw-bg-opacity: 1 !important;
   background-color: var(--bg-panel, rgb(9 9 11)) !important;
+}
+
+/* Dynamic Accent Remappings - Ensures changing root.css instantly controls ALL components */
+.bg-blue-600, .bg-blue-500, .bg-blue-700 {
+  background-color: var(--color-accent) !important;
+}
+.hover\:bg-blue-500:hover, .hover\:bg-blue-600:hover {
+  background-color: var(--color-accent-hover) !important;
+}
+.text-blue-400, .text-blue-500, .text-blue-300 {
+  color: var(--color-accent-text, #93a4be) !important;
+}
+.border-blue-500, .border-blue-600 {
+  border-color: var(--color-accent-border, rgba(41, 54, 75, 0.55)) !important;
+}
+.ring-blue-500, .ring-blue-600 {
+  --tw-ring-color: var(--color-accent) !important;
+}
+.bg-blue-500\/10, .bg-blue-500\/20, .bg-blue-600\/15 {
+  background-color: var(--color-accent-subtle, rgba(41, 54, 75, 0.25)) !important;
+}
+.shadow-blue-500\/25, .shadow-blue-500\/30, .shadow-blue-600\/25 {
+  box-shadow: 0 4px 14px 0 var(--color-accent-glow) !important;
+}
+.accent-blue-500, .accent-blue-600 {
+  accent-color: var(--color-accent) !important;
 }
 
 .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
@@ -74,12 +100,12 @@ body {
 
 /* Upload dropzone dotted border styling */
 .upload-dropzone {
-  border: 2px dashed var(--color-accent-border, rgba(41, 54, 75, 0.5));
+  border: 2px dashed var(--color-accent-border, rgba(41, 54, 75, 0.55));
   transition: border-color var(--transition-fast), background-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 .upload-dropzone:hover, .upload-dropzone-active {
   border-color: var(--color-accent, #29364b);
-  background-color: var(--color-accent-subtle, rgba(41, 54, 75, 0.18));
+  background-color: var(--color-accent-subtle, rgba(41, 54, 75, 0.25));
   box-shadow: 0 0 20px -3px var(--color-accent-glow, rgba(41, 54, 75, 0.45));
 }
 
