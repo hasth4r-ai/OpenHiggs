@@ -28,3 +28,29 @@ dist-ssr
 
 # Local Next.js build output
 .next/
+
+# User media, inputs, outputs, and generated files (STRICTLY PROTECTED)
+uploads/
+generations/
+temp/
+data/database/
+data/uploads/
+data/generations/
+config/*.json
+!config/wan-engine.example.json
+*.mp4
+*.mov
+*.mkv
+*.avi
+*.webm
+*.safetensors
+*.ckpt
+*.pt
+*.bin
+
+# Preserve static UI template assets
+!docs/assets/**
+!public/assets/**
+!public/fonts/**
+!public/banner.png
+!public/vite.svg
