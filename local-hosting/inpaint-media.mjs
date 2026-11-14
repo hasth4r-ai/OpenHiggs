@@ -107,6 +107,30 @@ export async function normalizeMask({ffmpeg, input, output, info, invert, expand
   }
 }
 
+export async function exportProResMaster({ffmpeg, source, generated, output, info, profile = '422hq', keepAudio = true, signal}) {
+  const p = PRORES[profile] || PRORES['422hq'];
+  const filter = `[0:v]setpts=PTS-STARTPTS,scale=${info.width}:${info.height}:flags=lanczos,setsar=1,format=${p.pixel}[out]`;
+  const hasAudioStream = keepAudio && info.hasAudio;
+  const args = [
+    '-nostdin', '-y', '-threads', '2',
+    '-i', generated,
+    ...(hasAudioStream ? ['-i', source] : []),
+    '-filter_complex', filter,
+    '-map', '[out]',
+    ...(hasAudioStream ? ['-map', '1:a:0', '-c:a', 'pcm_s24le'] : ['-an']),
+    '-c:v', 'prores_ks',
+    '-profile:v', String(p.profile),
+    '-pix_fmt', p.pixel,
+    '-threads', '2',
+    '-r', info.fpsExpression,
+    '-frames:v', String(info.frames),
+    '-t', String(info.duration),
+    '-f', 'mov',
+    output
+  ];
+  await exec(ffmpeg, args, {windowsHide: true, maxBuffer: 4 * 1024 * 1024, signal});
+}
+
 export async function compositeProRes({ffmpeg, source, generated, mask, output, info, profile = '422hq', feather = 4, keepAudio = true, signal}) {
   const p = PRORES[profile];
   if (!p) throw new Error('Unsupported ProRes profile.');

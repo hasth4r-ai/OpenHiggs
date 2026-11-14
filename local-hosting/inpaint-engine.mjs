@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {call,zipFiles} from './wan-client.mjs';
-import {uploadedPath,probeVideo,validatePair,normalizeMask,compositeProRes,makePreview,PRORES} from './inpaint-media.mjs';
+import {uploadedPath,probeVideo,validatePair,normalizeMask,compositeProRes,exportProResMaster,makePreview,PRORES} from './inpaint-media.mjs';
 import {inpaintSettings} from './inpaint-settings.mjs';
 // CPU preparation can outlive Gradio's keep-alive timeout. Use fresh connections
 // and retry only read-only probes, never task submissions.
@@ -65,11 +65,11 @@ export async function runInpaint({base,wanRoot,uploadsDir,outputDir,ffmpeg,body,
   const generated=await find(path.resolve(wanRoot,config.save_path||'outputs'));if(!generated)throw new Error('Wan2GP did not produce an edited video. Inspect its generation log.');
   const generatedInfo=await probeVideo(ffmpeg,generated);
   if(generatedInfo.frames < Math.min(info.frames - 2, 16) || Math.abs(generatedInfo.fps - info.fps) > 0.5)throw new Error('The model output does not match the source timeline. Original footage was preserved; no misaligned composite was exported.');
-  phase('Compositing masked region and exporting ProRes');
+  phase('Exporting master ProRes and preview');
   const mov=path.join(temporary,'master.mov'),preview=path.join(temporary,'preview.mp4');
   const abortController=new AbortController();const timer=setInterval(()=>{if(control.requested)abortController.abort();},250);
   try {
-    await compositeProRes({ffmpeg,source,generated,mask:normalized,output:mov,info,profile:body.profile||'422hq',feather:Number(body.feather??2),keepAudio:body.keepAudio!==false,signal:abortController.signal});check();
+    await exportProResMaster({ffmpeg,source,generated,output:mov,info,profile:body.profile||'422hq',keepAudio:body.keepAudio!==false,signal:abortController.signal});check();
     phase('Preparing MP4 preview');await makePreview({ffmpeg,input:mov,output:preview,signal:abortController.signal});check();
     const finalInfo=await probeVideo(ffmpeg,mov);if(finalInfo.frames!==info.frames||finalInfo.width!==info.width||finalInfo.height!==info.height)throw new Error('Export validation failed. The original footage is unchanged.');
     await fs.mkdir(outputDir,{recursive:true});await fs.rename(mov,path.join(outputDir,tag+'.mov'));await fs.rename(preview,path.join(outputDir,tag+'.mp4'));
