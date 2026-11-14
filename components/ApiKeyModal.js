@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { FingerprintLogoIcon } from '@/packages/studio/src/components/icons';
 
 export default function ApiKeyModal({ onSave }) {
   const [key, setKey] = useState('');
@@ -14,19 +15,17 @@ export default function ApiKeyModal({ onSave }) {
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] flex items-center justify-center px-4">
-      <div className="w-full max-w-md bg-[#0a0a0a] border border-white/10 rounded-3xl p-8">
+    <div className="min-h-screen bg-[#09090b] flex items-center justify-center px-4">
+      <div className="w-full max-w-md bg-[#111115] shadow-2xl rounded-3xl p-8">
         <div className="flex flex-col items-center text-center mb-8">
-          <div className="w-16 h-16 bg-[#d9ff00]/10 rounded-2xl flex items-center justify-center border border-[#d9ff00]/20 mb-6">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#d9ff00" strokeWidth="1.5">
-              <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L12 17.25l-4.5-4.5L15.5 7.5z"/>
-            </svg>
+          <div className="w-16 h-16 bg-blue-500/10 rounded-2xl flex items-center justify-center mb-4 transition-transform duration-200 hover:scale-105">
+            <FingerprintLogoIcon className="w-9 h-9 text-blue-500" />
           </div>
-          <h1 className="text-2xl font-black text-white uppercase tracking-wider mb-2">
-            Open Higgsfield AI
+          <h1 className="text-2xl font-black text-white tracking-wider mb-2">
+            Local AI Studio
           </h1>
           <p className="text-white/40 text-sm">
-            Enter your <a href="https://muapi.ai" target="_blank" rel="noreferrer" className="text-[#d9ff00] hover:underline">Muapi.ai</a> API key to start generating
+            Enter your <a href="https://muapi.ai" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline">Muapi.ai</a> API key to start generating
           </p>
         </div>
 
@@ -40,7 +39,7 @@ export default function ApiKeyModal({ onSave }) {
               value={key}
               onChange={(e) => { setKey(e.target.value); setError(''); }}
               placeholder="Enter your API key..."
-              className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-white placeholder:text-white/20 focus:outline-none focus:border-[#d9ff00]/40 transition-colors"
+              className="w-full bg-[#18181f] rounded-xl px-4 py-3 text-white placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
               suppressHydrationWarning
             />
             {error && <p className="mt-1 text-red-400 text-xs">{error}</p>}
@@ -48,7 +47,7 @@ export default function ApiKeyModal({ onSave }) {
 
           <button
             type="submit"
-            className="w-full bg-[#d9ff00] text-black font-black py-3 rounded-xl hover:opacity-90 transition-opacity"
+            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-blue-500/20 active:scale-[0.98]"
             suppressHydrationWarning
           >
             Launch Studio
@@ -56,7 +55,7 @@ export default function ApiKeyModal({ onSave }) {
 
           <p className="text-center text-xs text-white/30">
             Don&apos;t have a key?{' '}
-            <a href="https://muapi.ai" target="_blank" rel="noreferrer" className="text-[#d9ff00] hover:underline">
+            <a href="https://muapi.ai" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline">
               Get one free at Muapi.ai →
             </a>
           </p>

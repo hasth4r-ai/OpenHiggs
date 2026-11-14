@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { processLipSync, uploadFile, LOCAL_ENGINE_CONNECTED, LOCAL_UPLOADS_ENABLED } from '../local.js';
+import { ImageIcon, VideoCameraIcon, MicrophoneIcon } from './icons.jsx';
 import {
     lipsyncModels,
     imageLipSyncModels,
@@ -538,7 +539,9 @@ export default function LipSyncStudio({ apiKey, onGenerationComplete, historyIte
                                         <line x1="8" y1="23" x2="16" y2="23" />
                                     </svg>
                                 </div>
-                                <div className="absolute top-4 right-4 text-primary animate-pulse">🎙</div>
+                                <div className="absolute top-4 right-4 text-primary animate-pulse">
+                                    <MicrophoneIcon className="w-4 h-4" />
+                                </div>
                             </div>
                         </div>
                         <h1 className="text-2xl sm:text-4xl md:text-7xl font-black text-white tracking-widest uppercase mb-4 selection:bg-primary selection:text-black text-center px-4">
@@ -559,24 +562,26 @@ export default function LipSyncStudio({ apiKey, onGenerationComplete, historyIte
                                 <button
                                     type="button"
                                     onClick={switchToImage}
-                                    className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                                    className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${
                                         inputMode === 'image'
                                             ? 'border-primary bg-primary/10 text-primary'
                                             : 'border-white/10 text-muted hover:border-white/30 hover:text-white'
                                     }`}
                                 >
-                                    🖼 Portrait Image
+                                    <ImageIcon className="w-3.5 h-3.5" />
+                                    <span>Portrait Image</span>
                                 </button>
                                 <button
                                     type="button"
                                     onClick={switchToVideo}
-                                    className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                                    className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${
                                         inputMode === 'video'
                                             ? 'border-primary bg-primary/10 text-primary'
                                             : 'border-white/10 text-muted hover:border-white/30 hover:text-white'
                                     }`}
                                 >
-                                    🎬 Video
+                                    <VideoCameraIcon className="w-3.5 h-3.5" />
+                                    <span>Video</span>
                                 </button>
                             </div>
 
@@ -741,7 +746,7 @@ export default function LipSyncStudio({ apiKey, onGenerationComplete, historyIte
                                     ) : generateError ? (
                                         `Error: ${generateError}`
                                     ) : (
-                                        'Generate ✨'
+                                        'Generate'
                                     )}
                                 </button>
                             </div>

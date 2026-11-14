@@ -19,35 +19,35 @@ const CAMERA_PRESETS = [
     name: 'GENERAL',
     subtitle: 'MiniMax H3',
     description: 'Manual creative control with natural references & prompts.',
-    icon: <ClapperboardIcon className="w-5 h-5 text-[#d9ff00]" />,
+    icon: <ClapperboardIcon className="w-5 h-5 text-blue-400" />,
   },
   {
     id: 'tracking',
     name: 'TRACKING',
     subtitle: 'Camera Move',
     description: 'Smooth low-angle tracking shot following the subject.',
-    icon: <TrackingIcon className="w-5 h-5 text-[#d9ff00]" />,
+    icon: <TrackingIcon className="w-5 h-5 text-blue-400" />,
   },
   {
     id: 'push_in',
     name: 'PUSH IN',
     subtitle: 'Dramatic Focus',
     description: 'Slow, cinematic zoom in toward the character.',
-    icon: <ZoomInIcon className="w-5 h-5 text-[#d9ff00]" />,
+    icon: <ZoomInIcon className="w-5 h-5 text-blue-400" />,
   },
   {
     id: 'orbit',
     name: 'ORBIT',
     subtitle: '360° Arc',
     description: 'Controlled semicircular camera orbit around the focal point.',
-    icon: <OrbitIcon className="w-5 h-5 text-[#d9ff00]" />,
+    icon: <OrbitIcon className="w-5 h-5 text-blue-400" />,
   },
   {
     id: 'drone',
     name: 'DRONE / AERIAL',
     subtitle: 'Landscape Sweep',
     description: 'Expansive forward gliding sweep across the environment.',
-    icon: <DroneIcon className="w-5 h-5 text-[#d9ff00]" />,
+    icon: <DroneIcon className="w-5 h-5 text-blue-400" />,
   },
 ];
 
@@ -318,17 +318,17 @@ export default function VideoStudio({ apiKey }) {
 
 
   return (
-    <div className="relative h-full overflow-hidden bg-[#0a0a0a]">
+    <div className="relative h-full overflow-hidden bg-[#09090b]">
       <div className="studio-tab-panel" data-active={subTab==='edit'} aria-hidden={subTab!=='edit'} inert={subTab!=='edit'}>
         <InpaintStudio onNavigate={setSubTab} initialDraft={inpaintDraft} blocked={isGenerating}/>
       </div>
       <div className="studio-tab-panel" data-active={subTab!=='edit'} aria-hidden={subTab==='edit'} inert={subTab==='edit'}>
-      <div className="h-full flex overflow-hidden bg-[#0a0a0a] text-white select-none">
+      <div className="h-full flex overflow-hidden bg-[#09090b] text-white select-none">
       
       {/* ──────────────────────────────────────────────────────────────────────────
-          LEFT SIDEBAR: HIGGSFIELD STUDIO CONTROLS
+          LEFT SIDEBAR: STUDIO CONTROLS
           ────────────────────────────────────────────────────────────────────────── */}
-      <aside className="studio-sidebar flex-shrink-0 bg-[#0e0e0e] border-r border-white/10 flex flex-col h-full overflow-y-auto custom-scrollbar">
+      <aside className="studio-sidebar flex-shrink-0 bg-[#111115] shadow-2xl flex flex-col h-full overflow-y-auto custom-scrollbar">
         
         {/* Sub-tabs: Create Video | Edit Video | Motion Control */}
         <VideoWorkflowTabs active={subTab} onChange={setSubTab}/>
@@ -336,13 +336,13 @@ export default function VideoStudio({ apiKey }) {
         <div className="p-4 flex flex-col gap-4 flex-1">
 
           {/* Model / Preset Banner */}
-          <div className="relative rounded-2xl bg-[#161616] border border-white/10 p-3.5 flex items-center justify-between group overflow-hidden">
+          <div className="relative rounded-2xl bg-[#18181f] p-3.5 flex items-center justify-between group overflow-hidden transition-all duration-200 hover:bg-[#1f1f28]">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-[#222] border border-white/10 flex items-center justify-center overflow-hidden shadow-inner">
+              <div className="w-12 h-12 rounded-xl bg-[#24242d] flex items-center justify-center overflow-hidden shadow-inner">
                 {activePreset.icon}
               </div>
               <div className="flex flex-col">
-                <span className="text-xs font-black text-[#d9ff00] tracking-wider uppercase">
+                <span className="text-xs font-black text-blue-400 tracking-wider uppercase">
                   {activePreset.name}
                 </span>
                 <span className="text-[11px] text-white/60 font-medium">
@@ -353,25 +353,25 @@ export default function VideoStudio({ apiKey }) {
             <button
               type="button"
               onClick={() => setShowPresetModal(true)}
-              className="text-xs font-semibold text-white/70 hover:text-white bg-white/10 hover:bg-white/20 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 border border-white/5 cursor-pointer"
+              className="text-xs font-semibold text-white/80 hover:text-white bg-white/5 hover:bg-white/10 px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer interactive-hover"
             >
-              <EditPencilIcon className="w-3.5 h-3.5 text-[#d9ff00]" />
+              <EditPencilIcon className="w-3.5 h-3.5 text-blue-400" />
               <span>Change</span>
             </button>
           </div>
 
           {/* Mode Selector: [References] vs [Frames] */}
-          <div className="flex items-center bg-[#161616] p-1 rounded-xl border border-white/10">
+          <div className="flex items-center bg-[#18181f] p-1 rounded-xl">
             <button
               type="button"
               onClick={() => setRefMode('references')}
               className={`flex-1 py-1.5 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-all ${
                 refMode === 'references'
-                  ? 'bg-[#242424] text-white shadow-sm'
+                  ? 'bg-[#282833] text-white shadow-sm'
                   : 'text-white/50 hover:text-white'
               }`}
             >
-              <LayersIcon className="w-3.5 h-3.5 text-[#d9ff00]" />
+              <LayersIcon className="w-3.5 h-3.5 text-blue-400" />
               <span>References</span>
             </button>
             <button
@@ -379,7 +379,7 @@ export default function VideoStudio({ apiKey }) {
               onClick={() => setRefMode('frames')}
               className={`flex-1 py-1.5 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-all ${
                 refMode === 'frames'
-                  ? 'bg-[#242424] text-white shadow-sm'
+                  ? 'bg-[#282833] text-white shadow-sm'
                   : 'text-white/50 hover:text-white'
               }`}
             >
@@ -388,7 +388,7 @@ export default function VideoStudio({ apiKey }) {
             </button>
           </div>
 
-          {/* Add References Dropzone Card */}
+          {/* Add References Dropzone Card (Dotted/Dashed Border) */}
           <div
             onDragOver={(e) => {
               e.preventDefault();
@@ -404,10 +404,8 @@ export default function VideoStudio({ apiKey }) {
               setIsDragOver(false);
               handleUploadFiles(e.dataTransfer.files);
             }}
-            className={`border-2 border-dashed rounded-2xl p-4 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${
-              isDragOver
-                ? 'border-[#d9ff00] bg-[#d9ff00]/10 ring-2 ring-[#d9ff00]/30'
-                : 'border-white/15 hover:border-white/30 bg-[#141414]/80'
+            className={`upload-dropzone rounded-2xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all ${
+              isDragOver ? 'border-blue-500 bg-blue-500/10 ring-2 ring-blue-500/30' : ''
             }`}
             onClick={() => imageInputRef.current?.click()}
           >
@@ -442,21 +440,21 @@ export default function VideoStudio({ apiKey }) {
               <div 
                 title="Add Image Reference"
                 onClick={(e) => { e.stopPropagation(); imageInputRef.current?.click(); }}
-                className="w-9 h-9 rounded-full bg-white/10 hover:bg-[#d9ff00] hover:text-black transition-all flex items-center justify-center text-white/80"
+                className="w-9 h-9 rounded-full bg-white/5 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-white/80 cursor-pointer"
               >
                 <ImageIcon className="w-4 h-4" />
               </div>
               <div 
                 title="Add Video Reference"
                 onClick={(e) => { e.stopPropagation(); videoInputRef.current?.click(); }}
-                className="w-9 h-9 rounded-full bg-white/10 hover:bg-[#d9ff00] hover:text-black transition-all flex items-center justify-center text-white/80"
+                className="w-9 h-9 rounded-full bg-white/5 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-white/80 cursor-pointer"
               >
                 <VideoCameraIcon className="w-4 h-4" />
               </div>
               <div 
                 title="Add Audio Reference"
                 onClick={(e) => { e.stopPropagation(); audioInputRef.current?.click(); }}
-                className="w-9 h-9 rounded-full bg-white/10 hover:bg-[#d9ff00] hover:text-black transition-all flex items-center justify-center text-white/80"
+                className="w-9 h-9 rounded-full bg-white/5 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-white/80 cursor-pointer"
               >
                 <MicrophoneIcon className="w-4 h-4" />
               </div>
@@ -469,7 +467,7 @@ export default function VideoStudio({ apiKey }) {
               <span className="text-[10px] text-white/50 block mt-0.5">
                 Up to 9 images, 3 videos, and 3 audio files
               </span>
-              <span className="text-[9px] text-[#d9ff00]/80 font-mono block mt-1">
+              <span className="text-[9px] text-blue-400/90 font-mono block mt-1">
                 Drop files here or Paste from Clipboard (<kbd>Ctrl+V</kbd>)
               </span>
             </div>
@@ -477,7 +475,7 @@ export default function VideoStudio({ apiKey }) {
 
           {/* Reference Chips / Tray (When files exist) */}
           {references.length > 0 && (
-            <div className="flex flex-col gap-2 bg-[#121212] p-2.5 rounded-2xl border border-white/10">
+            <div className="flex flex-col gap-2 bg-[#18181f] p-2.5 rounded-2xl">
               <div className="flex items-center justify-between px-1">
                 <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest">
                   Attached Elements ({references.length})
@@ -490,14 +488,14 @@ export default function VideoStudio({ apiKey }) {
                 {references.map(ref => (
                   <div
                     key={ref.id}
-                    className="flex items-center justify-between gap-2 bg-[#1a1a1a] p-1.5 rounded-xl border border-white/5 hover:border-white/15 transition-all"
+                    className="flex items-center justify-between gap-2 bg-[#22222b] p-1.5 rounded-xl hover:bg-[#282833] transition-all"
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-8 h-8 rounded-lg overflow-hidden bg-black/60 flex-shrink-0 border border-white/10 flex items-center justify-center">
+                      <div className="w-8 h-8 rounded-lg overflow-hidden bg-black/60 flex-shrink-0 flex items-center justify-center">
                         {ref.type === 'video' ? (
                           <video src={ref.url} className="w-full h-full object-cover" muted />
                         ) : ref.type === 'audio' ? (
-                          <MicrophoneIcon className="w-4 h-4 text-[#d9ff00]" />
+                          <MicrophoneIcon className="w-4 h-4 text-blue-400" />
                         ) : (
                           <img src={ref.url} alt="" className="w-full h-full object-cover" />
                         )}
@@ -506,7 +504,7 @@ export default function VideoStudio({ apiKey }) {
                         type="button"
                         onClick={() => insertTagIntoPrompt(ref.tag)}
                         title={`Click to insert ${ref.tag} into prompt`}
-                        className="text-xs font-mono font-bold text-[#d9ff00] hover:underline flex-shrink-0"
+                        className="text-xs font-mono font-bold text-blue-400 hover:underline flex-shrink-0"
                       >
                         {ref.tag}
                       </button>
@@ -516,7 +514,7 @@ export default function VideoStudio({ apiKey }) {
                       <select
                         value={ref.role}
                         onChange={(e) => updateReferenceRole(ref.id, e.target.value)}
-                        className="bg-black/80 text-[10px] text-white/80 rounded-md px-1.5 py-0.5 border border-white/10 focus:outline-none focus:border-[#d9ff00]"
+                        className="bg-[#18181f] text-[10px] text-white/80 rounded-md px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
                       >
                         {ref.type === 'video' ? (
                           <>
@@ -563,7 +561,7 @@ export default function VideoStudio({ apiKey }) {
               <button
                 type="button"
                 onClick={() => setShowCompiledPrompt(s => !s)}
-                className="text-[10px] text-[#d9ff00] hover:underline font-mono"
+                className="text-[10px] text-blue-400 hover:underline font-mono"
               >
                 {showCompiledPrompt ? 'Hide H3 Syntax ▲' : 'Inspect H3 Syntax ▼'}
               </button>
@@ -576,7 +574,7 @@ export default function VideoStudio({ apiKey }) {
                 onChange={(e) => setPrompt(e.target.value)}
                 rows={4}
                 placeholder="Describe the video. Refer to inputs as Image 1, Video 1, or Audio 1. Add elements using @"
-                className="w-full bg-[#141414] border border-white/10 rounded-2xl p-3 text-xs md:text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-[#d9ff00]/60 resize-none custom-scrollbar leading-relaxed"
+                className="w-full bg-[#18181f] rounded-2xl p-3 text-xs md:text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/40 resize-none custom-scrollbar leading-relaxed transition-all"
               />
 
               {/* @ Elements Quick Button */}
@@ -585,15 +583,15 @@ export default function VideoStudio({ apiKey }) {
                   <button
                     type="button"
                     onClick={() => setShowElementsMenu(s => !s)}
-                    className="text-[11px] font-bold text-white/70 hover:text-white bg-white/5 hover:bg-white/10 px-2.5 py-1 rounded-lg border border-white/10 transition-all flex items-center gap-1"
+                    className="text-[11px] font-bold text-white/70 hover:text-white bg-white/5 hover:bg-white/10 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 interactive-hover"
                   >
                     <span>@ Elements</span>
                   </button>
 
                   {/* Elements Popover Menu */}
                   {showElementsMenu && (
-                    <div className="absolute left-0 bottom-full mb-1 w-52 bg-[#181818] border border-white/15 rounded-xl p-2 shadow-2xl z-50 flex flex-col gap-1">
-                      <span className="text-[9px] font-bold text-white/50 uppercase tracking-widest px-1 pb-1 border-b border-white/5">
+                    <div className="absolute left-0 bottom-full mb-1 w-52 bg-[#18181f] rounded-xl p-2 shadow-2xl z-50 flex flex-col gap-1">
+                      <span className="text-[9px] font-bold text-white/50 uppercase tracking-widest px-1 pb-1 text-white/40">
                         Insert Reference Tag
                       </span>
                       {references.length === 0 ? (
@@ -608,7 +606,7 @@ export default function VideoStudio({ apiKey }) {
                             onClick={() => insertTagIntoPrompt(r.tag)}
                             className="flex items-center justify-between p-1.5 rounded-lg hover:bg-white/10 text-left text-xs transition-colors"
                           >
-                            <span className="font-mono font-bold text-[#d9ff00]">{r.tag}</span>
+                            <span className="font-mono font-bold text-blue-400">{r.tag}</span>
                             <span className="text-[10px] text-white/60 truncate max-w-[100px]">{r.name}</span>
                           </button>
                         ))
@@ -625,8 +623,8 @@ export default function VideoStudio({ apiKey }) {
 
             {/* Compiled H3 Ref2VA Preview Drawer */}
             {showCompiledPrompt && (
-              <div className="mt-2 bg-[#090909] border border-[#d9ff00]/30 rounded-xl p-2.5 flex flex-col gap-1 text-[10px] font-mono animate-fade-in">
-                <div className="flex items-center justify-between text-[#d9ff00] font-bold pb-1 border-b border-white/10">
+              <div className="mt-2 bg-[#111115] rounded-xl p-2.5 flex flex-col gap-1 text-[10px] font-mono animate-fade-in">
+                <div className="flex items-center justify-between text-blue-400 font-bold pb-1">
                   <span>Compiled MiniMax H3 Ref2VA</span>
                   <span className="text-[9px] text-white/40">Zero empty lines</span>
                 </div>
@@ -638,47 +636,47 @@ export default function VideoStudio({ apiKey }) {
           </div>
 
           {/* Parameters Grid */}
-          <div className="flex flex-col gap-2.5 pt-2 border-t border-white/5">
+          <div className="flex flex-col gap-2.5 pt-2">
             {/* Model Row */}
-            <div className="flex items-center justify-between bg-[#141414] p-2.5 rounded-xl border border-white/10">
+            <div className="flex items-center justify-between bg-[#18181f] p-2.5 rounded-xl">
               <span className="text-xs font-bold text-white/60">Model</span>
-              <span className="text-xs font-black text-[#d9ff00] flex items-center gap-1.5">
+              <span className="text-xs font-black text-blue-400 flex items-center gap-1.5">
                 <span>MiniMax H3</span>
-                <SparkleIcon className="w-3.5 h-3.5 text-[#d9ff00]" />
+                <SparkleIcon className="w-3.5 h-3.5 text-blue-400" />
               </span>
             </div>
 
             {/* Duration & Aspect Ratio */}
             <div className="grid grid-cols-2 gap-2">
-              <div className="flex flex-col gap-1 bg-[#141414] p-2 rounded-xl border border-white/10">
+              <div className="flex flex-col gap-1 bg-[#18181f] p-2 rounded-xl">
                 <span className="text-[10px] font-bold text-white/50 uppercase">Duration</span>
                 <select
                   value={duration}
                   onChange={(e) => setDuration(e.target.value)}
                   className="bg-transparent text-xs font-bold text-white focus:outline-none cursor-pointer"
                 >
-                  <option value="5s" className="bg-[#141414]">5s</option>
-                  <option value="10s" className="bg-[#141414]">10s</option>
+                  <option value="5s" className="bg-[#18181f]">5s</option>
+                  <option value="10s" className="bg-[#18181f]">10s</option>
                 </select>
               </div>
 
-              <div className="flex flex-col gap-1 bg-[#141414] p-2 rounded-xl border border-white/10">
+              <div className="flex flex-col gap-1 bg-[#18181f] p-2 rounded-xl">
                 <span className="text-[10px] font-bold text-white/50 uppercase">Aspect Ratio</span>
                 <select
                   value={aspectRatio}
                   onChange={(e) => setAspectRatio(e.target.value)}
                   className="bg-transparent text-xs font-bold text-white focus:outline-none cursor-pointer"
                 >
-                  <option value="Auto" className="bg-[#141414]">Auto</option>
-                  <option value="16:9" className="bg-[#141414]">16:9 (Landscape)</option>
-                  <option value="9:16" className="bg-[#141414]">9:16 (Portrait)</option>
-                  <option value="1:1" className="bg-[#141414]">1:1 (Square)</option>
+                  <option value="Auto" className="bg-[#18181f]">Auto</option>
+                  <option value="16:9" className="bg-[#18181f]">16:9 (Landscape)</option>
+                  <option value="9:16" className="bg-[#18181f]">9:16 (Portrait)</option>
+                  <option value="1:1" className="bg-[#18181f]">1:1 (Square)</option>
                 </select>
               </div>
             </div>
 
             {/* Quality Row */}
-            <div className="flex items-center justify-between bg-[#141414] p-2.5 rounded-xl border border-white/10">
+            <div className="flex items-center justify-between bg-[#18181f] p-2.5 rounded-xl">
               <span className="text-xs font-bold text-white/50 uppercase">Quality</span>
               <div className="flex items-center gap-1">
                 {['480p', '720p', '1080p'].map(q => (
@@ -688,7 +686,7 @@ export default function VideoStudio({ apiKey }) {
                     onClick={() => setQuality(q)}
                     className={`px-2 py-0.5 text-[11px] font-bold rounded-md transition-all ${
                       quality === q
-                        ? 'bg-[#d9ff00] text-black'
+                        ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25'
                         : 'text-white/60 hover:text-white bg-white/5'
                     }`}
                   >
@@ -699,24 +697,24 @@ export default function VideoStudio({ apiKey }) {
             </div>
           </div>
 
-          {/* Big Lime-Green Generate Button */}
+          {/* Blue Generate Button */}
           <div className="mt-auto pt-3">
             <button
               type="button"
               disabled={isGenerating}
               onClick={handleGenerate}
-              className="w-full bg-[#d9ff00] text-black font-black text-sm py-3.5 rounded-2xl hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 cursor-pointer"
+              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm py-3.5 rounded-2xl shadow-lg shadow-blue-500/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
             >
               {isGenerating ? (
                 <>
-                  <span className="animate-spin inline-block text-black">◌</span>
+                  <span className="animate-spin inline-block text-white">◌</span>
                   <span className="truncate max-w-[240px]">{generationStatus || 'Rendering...'}</span>
                 </>
               ) : (
                 <>
                   <span>Generate</span>
-                  <SparkleIcon className="w-4 h-4 text-black" />
-                  <span className="text-[10px] font-mono bg-black/15 px-2 py-0.5 rounded-full ml-1">
+                  <SparkleIcon className="w-4 h-4 text-white" />
+                  <span className="text-[10px] font-mono bg-white/20 px-2 py-0.5 rounded-full ml-1">
                     Local
                   </span>
                 </>
@@ -743,8 +741,8 @@ export default function VideoStudio({ apiKey }) {
       {/* Preset Modal */}
       {showPresetModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#141414] border border-white/15 rounded-3xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-4">
-            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+          <div className="bg-[#111115] rounded-3xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-4 animate-scale-in">
+            <div className="flex items-center justify-between pb-3">
               <h3 className="text-base font-black text-white uppercase tracking-wide">
                 Select Camera Preset
               </h3>
@@ -764,15 +762,15 @@ export default function VideoStudio({ apiKey }) {
                     setActivePreset(preset);
                     setShowPresetModal(false);
                   }}
-                  className={`p-3 rounded-2xl border text-left flex items-center gap-3.5 transition-all ${
+                  className={`p-3 rounded-2xl text-left flex items-center gap-3.5 transition-all ${
                     activePreset.id === preset.id
-                      ? 'border-[#d9ff00] bg-[#d9ff00]/10 text-white'
-                      : 'border-white/10 hover:border-white/30 bg-white/5 text-white/80'
+                      ? 'bg-blue-600/15 ring-2 ring-blue-500/60 text-white'
+                      : 'bg-[#18181f] hover:bg-[#22222b] text-white/80'
                   }`}
                 >
                   <div className="flex-shrink-0">{preset.icon}</div>
                   <div className="flex flex-col">
-                    <span className="text-xs font-black text-[#d9ff00]">{preset.name}</span>
+                    <span className="text-xs font-black text-blue-400">{preset.name}</span>
                     <span className="text-[11px] text-white/60">{preset.description}</span>
                   </div>
                 </button>

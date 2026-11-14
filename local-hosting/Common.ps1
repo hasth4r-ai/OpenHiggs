@@ -56,6 +56,6 @@ function Test-StudioResponse {
     param([string]$Url)
     try {
         $response = Invoke-WebRequest -Uri ($Url + '/studio') -UseBasicParsing -TimeoutSec 3
-        return ($response.StatusCode -eq 200 -and $response.Content.Contains('Open Higgsfield'))
+        return ($response.StatusCode -eq 200 -and ($response.Content.Contains('Open Higgsfield') -or $response.Content.Contains('Local AI Studio')))
     } catch { return $false }
 }

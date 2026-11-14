@@ -636,7 +636,7 @@ export default function CinemaStudio({ apiKey, onGenerationComplete, historyItem
                     </button>
                     <button
                         onClick={handleDownload}
-                        className="bg-[#d9ff00] text-black px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wide hover:bg-white transition-colors shadow-glow-sm hover:scale-105 active:scale-95"
+                        className="bg-blue-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wide hover:bg-blue-500 transition-all shadow-lg shadow-blue-500/25 hover:scale-105 active:scale-95"
                     >
                         ↓ Download
                     </button>
@@ -736,18 +736,18 @@ export default function CinemaStudio({ apiKey, onGenerationComplete, historyItem
 
                         {/* Generate Button */}
                         <button
-                            className="h-[56px] px-8 bg-[#d9ff00] text-black rounded-xl font-black text-xs uppercase hover:bg-white transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="h-[56px] px-8 bg-blue-600 text-white rounded-xl font-bold text-xs uppercase hover:bg-blue-500 transition-all shadow-lg shadow-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
                             disabled={!LOCAL_ENGINE_CONNECTED || isGenerating || !settings.prompt.trim()}
                             onClick={handleGenerate}
                         >
-                            {isGenerating ? 'SHOOTING...' : 'GENERATE ✨'}
+                            {isGenerating ? 'SHOOTING...' : 'GENERATE'}
                         </button>
                     </div>
                 </div>
             </div>
 
             {/* ── 4. History Sidebar ── */}
-            <div className="fixed right-0 top-0 h-full w-20 md:w-24 bg-black/60 backdrop-blur-xl border-l border-white/5 z-50 flex flex-col items-center py-4 gap-3 overflow-y-auto transition-all duration-500">
+            <div className="fixed right-0 top-0 h-full w-20 md:w-24 bg-black/60 backdrop-blur-xl z-50 flex flex-col items-center py-4 gap-3 overflow-y-auto transition-all duration-500">
                 <div className="text-[9px] font-bold text-white/40 uppercase tracking-widest mb-2">
                     History
                 </div>
@@ -755,7 +755,7 @@ export default function CinemaStudio({ apiKey, onGenerationComplete, historyItem
                     {history.map((entry, idx) => (
                         <div
                             key={entry.timestamp ?? idx}
-                            className={`relative group/thumb cursor-pointer rounded-lg overflow-hidden border-2 transition-all duration-300 aspect-square ${idx === activeHistoryIndex ? 'border-[#d9ff00] shadow-glow-sm' : 'border-white/10 hover:border-white/30'}`}
+                            className={`relative group/thumb cursor-pointer rounded-lg overflow-hidden transition-all duration-300 aspect-square ${idx === activeHistoryIndex ? 'ring-2 ring-blue-500 shadow-md shadow-blue-500/30' : 'opacity-80 hover:opacity-100'}`}
                             onClick={() => loadHistoryItem(entry, idx)}
                         >
                             <img
