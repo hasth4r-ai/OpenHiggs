@@ -5,9 +5,11 @@ import CustomSelect from './CustomSelect.jsx';
 
 const time = seconds => `${Math.floor(Math.max(0,seconds)/60)}m ${Math.floor(Math.max(0,seconds)%60)}s`;
 const getModelName = (item) => {
-  if (!item) return 'MiniMax H3';
-  if (item.inpaintRequest) {
-    const m = item.inpaintRequest.model;
+  if (!item) return 'Wan 2.1 (Vace 14B FusioniX)';
+  const file = (item.fileName || item.id || '').toLowerCase();
+  if (file.includes('wan')) return 'Wan 2.1 (Vace 14B FusioniX)';
+  if (item.inpaintRequest || item.workflow === 'inpaint' || file.startsWith('inpaint_') || item.model?.includes('Inpaint')) {
+    const m = item.inpaintRequest?.model;
     if (m === 'minimax_h3') return 'MiniMax H3 Inpaint';
     return 'Wan 2.1 (Vace 14B FusioniX)';
   }

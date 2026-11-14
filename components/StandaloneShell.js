@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   ImageStudio, 
   VideoStudio, 
@@ -25,6 +25,22 @@ export default function StandaloneShell() {
   const [activeTab, setActiveTab] = useState('video');
   const [showSettings, setShowSettings] = useState(false);
 
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('openhiggs_active_studio_tab');
+      if (saved && TABS.some(t => t.id === saved)) {
+        setActiveTab(saved);
+      }
+    } catch {}
+  }, []);
+
+  const switchTab = (tabId) => {
+    setActiveTab(tabId);
+    try {
+      localStorage.setItem('openhiggs_active_studio_tab', tabId);
+    } catch {}
+  };
+
   return (
     <div className="h-screen bg-[var(--bg-app,rgb(9,9,11))] flex flex-row overflow-hidden text-white select-none">
       {/* ──────────────────────────────────────────────────────────
@@ -37,7 +53,7 @@ export default function StandaloneShell() {
           <div 
             title="Local AI Studio"
             className="w-10 h-10 rounded-xl bg-[var(--color-accent-subtle)] flex items-center justify-center text-[var(--color-accent)] shadow-sm cursor-pointer hover:opacity-90 transition-opacity"
-            onClick={() => setActiveTab('video')}
+            onClick={() => switchTab('video')}
           >
             <FingerprintLogoIcon className="w-6 h-6 text-white/90" />
           </div>
@@ -50,7 +66,7 @@ export default function StandaloneShell() {
                 <button
                   key={tab.id}
                   aria-pressed={isActive}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => switchTab(tab.id)}
                   title={tab.label}
                   className={`w-11 h-11 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all duration-200 group relative ${
                     isActive

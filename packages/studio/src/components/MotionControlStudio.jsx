@@ -57,6 +57,39 @@ export default function MotionControlStudio({ onNavigate, blocked = false }) {
 
   const fileInputRef = useRef(null);
 
+  // Restore persisted state from localStorage
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('openhiggs_motion_studio_state_v1');
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      if (s.sourceImage) setSourceImage(s.sourceImage);
+      if (s.selectedMotion) setSelectedMotion(s.selectedMotion);
+      if (typeof s.motionSpeed === 'number') setMotionSpeed(s.motionSpeed);
+      if (typeof s.motionPrompt === 'string') setMotionPrompt(s.motionPrompt);
+      if (s.duration) setDuration(s.duration);
+      if (s.aspectRatio) setAspectRatio(s.aspectRatio);
+      if (s.quality) setQuality(s.quality);
+    } catch (e) {
+      console.error('Failed to restore motion studio state:', e);
+    }
+  }, []);
+
+  // Persist state to localStorage on any change
+  useEffect(() => {
+    try {
+      localStorage.setItem('openhiggs_motion_studio_state_v1', JSON.stringify({
+        sourceImage,
+        selectedMotion,
+        motionSpeed,
+        motionPrompt,
+        duration,
+        aspectRatio,
+        quality
+      }));
+    } catch {}
+  }, [sourceImage, selectedMotion, motionSpeed, motionPrompt, duration, aspectRatio, quality]);
+
   // Upload handler
   const handleUploadImage = async (file) => {
     if (!file || !file.type.startsWith('image/')) return;

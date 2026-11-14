@@ -94,6 +94,46 @@ export default function VideoStudio({ apiKey }) {
   }, [isGenerating]);
   const formatTime = (seconds) => `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
 
+  // Restore persisted state from localStorage
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('openhiggs_video_studio_state_v1');
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      if (s.subTab && ['create', 'edit', 'motion'].includes(s.subTab)) setSubTab(s.subTab);
+      if (s.refMode && ['references', 'frames'].includes(s.refMode)) setRefMode(s.refMode);
+      if (typeof s.prompt === 'string') setPrompt(s.prompt);
+      if (s.duration) setDuration(s.duration);
+      if (s.aspectRatio) setAspectRatio(s.aspectRatio);
+      if (s.quality) setQuality(s.quality);
+      if (s.activePresetId) {
+        const preset = CAMERA_PRESETS.find(p => p.id === s.activePresetId);
+        if (preset) setActivePreset(preset);
+      }
+      if (Array.isArray(s.references) && s.references.length > 0) {
+        setReferences(s.references);
+      }
+    } catch (e) {
+      console.error('Failed to restore video studio state:', e);
+    }
+  }, []);
+
+  // Persist state to localStorage on any change
+  useEffect(() => {
+    try {
+      localStorage.setItem('openhiggs_video_studio_state_v1', JSON.stringify({
+        subTab,
+        refMode,
+        prompt,
+        duration,
+        aspectRatio,
+        quality,
+        activePresetId: activePreset?.id,
+        references
+      }));
+    } catch {}
+  }, [subTab, refMode, prompt, duration, aspectRatio, quality, activePreset, references]);
+
   // Refs
   const imageInputRef = useRef(null);
   const videoInputRef = useRef(null);

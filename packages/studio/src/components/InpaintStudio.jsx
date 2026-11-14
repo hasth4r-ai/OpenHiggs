@@ -41,6 +41,38 @@ export default function InpaintStudio({onNavigate,initialDraft,blocked=false}) {
   const size=info?processingSize(info.source,form.processingResolution):null;
   const update=(key,value)=>setForm(old=>({...old,[key]:value}));
 
+  const resetToDefaults = () => {
+    setForm(defaults);
+    setNames({});
+    setInfo(null);
+    setPreviews({});
+    try {
+      localStorage.removeItem('openhiggs_inpaint_studio_state_v1');
+    } catch {}
+  };
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('openhiggs_inpaint_studio_state_v1');
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      if (s.form) {
+        setForm(old => ({ ...old, ...s.form, ...(initialDraft || {}) }));
+      }
+      if (s.names) {
+        setNames(s.names);
+      }
+    } catch (e) {
+      console.error('Failed to restore inpaint studio state:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('openhiggs_inpaint_studio_state_v1', JSON.stringify({ form, names }));
+    } catch {}
+  }, [form, names]);
+
   useEffect(()=>{if(initialDraft){setForm({...defaults,...initialDraft});setInfo(null);}},[initialDraft]);
 
   useEffect(()=>{
@@ -83,9 +115,20 @@ export default function InpaintStudio({onNavigate,initialDraft,blocked=false}) {
     <aside className="studio-sidebar shrink-0 overflow-y-auto custom-scrollbar bg-[#111115] shadow-2xl">
       <VideoWorkflowTabs active="edit" onChange={onNavigate}/>
       <div className="p-4 space-y-4">
-        <div>
-          <h1 className="text-base font-semibold">Video Inpaint</h1>
-          <p className="text-xs text-white/40 mt-1">Wan 2.1 Vace 14B & MiniMax H3 · masked footage editing</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-base font-semibold">Video Inpaint</h1>
+            <p className="text-xs text-white/40 mt-1">Wan 2.1 Vace 14B & MiniMax H3 · masked footage editing</p>
+          </div>
+          <button
+            type="button"
+            onClick={resetToDefaults}
+            disabled={generating}
+            className="text-[11px] text-white/40 hover:text-white px-2 py-1 rounded-md bg-white/[0.04] hover:bg-white/[0.08] transition-colors"
+            title="Reset all inpaint settings and inputs to default"
+          >
+            Reset
+          </button>
         </div>
 
         {/* Model Selector */}
