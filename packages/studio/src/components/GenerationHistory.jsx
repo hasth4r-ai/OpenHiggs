@@ -347,17 +347,10 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
               <div 
                 className={
                   view === 'masonry'
-                    ? 'gap-2'
+                    ? 'columns-2 sm:columns-3 md:columns-4 lg:columns-5 xl:columns-6 2xl:columns-7 gap-2 [column-fill:balance] w-full'
                     : view === 'grid'
-                    ? 'gap-2'
-                    : 'flex flex-col gap-2'
-                }
-                style={
-                  view === 'masonry'
-                    ? { columnWidth: '220px', columnGap: '0.5rem' }
-                    : view === 'grid'
-                    ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '0.5rem' }
-                    : undefined
+                    ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-2 w-full'
+                    : 'flex flex-col gap-2 w-full'
                 }
               >
                 {entries.map(item => {
@@ -389,14 +382,20 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
                           ? 'break-inside-avoid mb-2 inline-block w-full align-top' 
                           : view === 'grid' 
                           ? 'aspect-square flex items-center justify-center' 
-                          : 'flex flex-col sm:flex-row'
+                          : 'flex flex-col sm:flex-row w-full'
                       }`}
                     >
-                      <div className={`relative w-full overflow-hidden bg-[#0c0c10] flex items-center justify-center ${view === 'grid' ? 'h-full' : 'h-auto'}`}>
+                      <div className={`relative overflow-hidden bg-[#0c0c10] flex items-center justify-center ${
+                        view === 'grid' 
+                          ? 'h-full w-full' 
+                          : view === 'list' 
+                          ? 'w-full sm:w-72 sm:max-w-xs flex-shrink-0 h-auto' 
+                          : 'w-full h-auto'
+                      }`}>
                         {preview(item)}
 
-                        {/* Hover Overlay with Metadata and Icon-Only Buttons */}
-                        {item.status === 'completed' && (
+                        {/* Hover Overlay with Metadata and Icon-Only Buttons (for Masonry and Grid) */}
+                        {item.status === 'completed' && view !== 'list' && (
                           <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-between p-3.5 z-10 pointer-events-none group-hover:pointer-events-auto">
                             {/* Top: Metadata */}
                             <div className="flex items-center justify-between text-xs text-white/90">
@@ -474,6 +473,87 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
                           </div>
                         )}
                       </div>
+
+                      {/* List View Details Panel */}
+                      {view === 'list' && (
+                        <div className="flex-1 min-w-0 p-4 flex flex-col justify-between gap-3 bg-[#14141a]">
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center justify-between text-xs text-white/90">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-white text-xs">{getModelName(item)}</span>
+                                <span className="text-white/30">·</span>
+                                <span className="text-[11px] text-white/70 font-mono">{item.quality || item.resolution || (itemIsImage ? '1024x1024' : 'Video')}</span>
+                                {hasMultiple && (
+                                  <span className="px-1.5 py-0.5 rounded bg-[var(--color-accent)] text-white text-[10px] font-bold">
+                                    Batch of {item.images.length}
+                                  </span>
+                                )}
+                              </div>
+                              <time className="text-xs text-white/50 font-mono">
+                                {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </time>
+                            </div>
+
+                            <p className="text-xs text-white/80 line-clamp-3 leading-relaxed">
+                              {item.prompt || (item.status === 'completed' ? 'Generation completed.' : item.phase || 'Processing…')}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                            <div className="flex items-center gap-2">
+                              {item.aspectRatio && (
+                                <span className="text-[10px] bg-white/5 px-2 py-0.5 rounded text-white/60 font-mono">
+                                  AR: {item.aspectRatio}
+                                </span>
+                              )}
+                              {item.duration && (
+                                <span className="text-[10px] bg-white/5 px-2 py-0.5 rounded text-white/60 font-mono">
+                                  {item.duration}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {item.prompt && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); onReuse(item); setNotice('Settings restored.'); }}
+                                  className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-[var(--color-accent)] text-white/80 hover:text-white text-xs font-medium flex items-center gap-1.5 transition-all"
+                                >
+                                  <RefreshIcon className="w-3.5 h-3.5" /> Reuse
+                                </button>
+                              )}
+                              {item.prompt && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); copy(item); }}
+                                  className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-[var(--color-accent)] text-white/80 hover:text-white text-xs font-medium flex items-center gap-1.5 transition-all"
+                                >
+                                  <CopyIcon className="w-3.5 h-3.5" /> Copy
+                                </button>
+                              )}
+                              {mediaUrl && (
+                                <a
+                                  href={mediaUrl}
+                                  download={currentMedia.fileName || item.fileName || 'download'}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-[var(--color-accent)] text-white/80 hover:text-white text-xs font-medium flex items-center gap-1.5 transition-all"
+                                >
+                                  <DownloadIcon className="w-3.5 h-3.5" /> Download
+                                </a>
+                              )}
+                              <button
+                                type="button"
+                                disabled={pending === item.id}
+                                onClick={(e) => { e.stopPropagation(); act(item, 'delete'); }}
+                                className="p-1.5 rounded-lg bg-white/5 hover:bg-red-500/80 text-white/80 hover:text-white transition-all"
+                                title="Delete"
+                              >
+                                <TrashIcon className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </article>
                   );
                 })}

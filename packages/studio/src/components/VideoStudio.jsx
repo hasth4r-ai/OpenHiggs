@@ -623,7 +623,7 @@ export default function VideoStudio({ apiKey, initialSubTab, onSubTabChange }) {
 
               {/* Reference Chips / Tray (When files exist) */}
               {references.length > 0 && (
-                <div className="flex flex-col gap-2 bg-[#18181f] p-2.5 rounded-2xl">
+                <div className="flex flex-col gap-2 bg-[#18181f] p-2.5 rounded-2xl relative z-20">
                   <div className="flex items-center justify-between px-1">
                     <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest">
                       Attached Elements ({references.length})
@@ -636,7 +636,7 @@ export default function VideoStudio({ apiKey, initialSubTab, onSubTabChange }) {
                     {references.map(ref => (
                       <div
                         key={ref.id}
-                        className="flex items-center justify-between gap-2 bg-[#22222b] p-1.5 rounded-xl hover:bg-[#282833] transition-all"
+                        className="flex items-center justify-between gap-2 bg-[#22222b] p-1.5 rounded-xl hover:bg-[#282833] transition-all relative hover:z-30 focus-within:z-30"
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <div className="w-8 h-8 rounded-lg overflow-hidden bg-black/60 flex-shrink-0 flex items-center justify-center">
