@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import CustomSelect from './CustomSelect.jsx';
 import GenerationHistory from './GenerationHistory.jsx';
-import { compileH3Prompt } from '../h3Compiler.js';
+import { compileH3Prompt, compileH3InpaintPrompt } from '../h3Compiler.js';
 import { 
   SparkleIcon, 
   ImageIcon, 
@@ -81,6 +81,7 @@ export default function ImageStudio({ apiKey, initialSubTab = 'create', onSubTab
 
   // Edit Image state (Clean Plate / Replace)
   const [editSource, setEditSource] = useState(null); // { url, name }
+  const [sourceDim, setSourceDim] = useState({ width: 1024, height: 1024, ar: '1 / 1' });
   const [editMask, setEditMask] = useState(null);
   const [editPrompt, setEditPrompt] = useState('');
   const [editReference, setEditReference] = useState(null);
@@ -292,42 +293,57 @@ export default function ImageStudio({ apiKey, initialSubTab = 'create', onSubTab
     ctx.stroke();
   };
 
+  const exportAndUploadMask = () => {
+    return new Promise((resolve) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return resolve(null);
+      const maskCanvas = document.createElement('canvas');
+      maskCanvas.width = canvas.width;
+      maskCanvas.height = canvas.height;
+      const mctx = maskCanvas.getContext('2d');
+      mctx.fillStyle = '#000000';
+      mctx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+      mctx.drawImage(canvas, 0, 0);
+
+      const imgData = mctx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+      let hasMaskPixels = false;
+      for (let i = 0; i < imgData.data.length; i += 4) {
+        if (imgData.data[i + 3] > 20 && imgData.data[i] > 80) {
+          imgData.data[i] = 255;
+          imgData.data[i + 1] = 255;
+          imgData.data[i + 2] = 255;
+          imgData.data[i + 3] = 255;
+          hasMaskPixels = true;
+        } else {
+          imgData.data[i] = 0;
+          imgData.data[i + 1] = 0;
+          imgData.data[i + 2] = 0;
+          imgData.data[i + 3] = 255;
+        }
+      }
+      if (!hasMaskPixels) return resolve(null);
+      mctx.putImageData(imgData, 0, 0);
+      maskCanvas.toBlob(async (blob) => {
+        if (blob) {
+          try {
+            const file = new File([blob], 'mask.png', { type: 'image/png' });
+            const maskUrl = await uploadFile(apiKey, file);
+            setEditMask(maskUrl);
+            resolve(maskUrl);
+          } catch {
+            resolve(null);
+          }
+        } else {
+          resolve(null);
+        }
+      });
+    });
+  };
+
   const stopDrawing = () => {
     if (!isDrawing) return;
     setIsDrawing(false);
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    // Export binary mask
-    const maskCanvas = document.createElement('canvas');
-    maskCanvas.width = canvas.width;
-    maskCanvas.height = canvas.height;
-    const mctx = maskCanvas.getContext('2d');
-    mctx.fillStyle = '#000000';
-    mctx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
-    mctx.drawImage(canvas, 0, 0);
-    // Convert red strokes to white
-    const imgData = mctx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
-    for (let i = 0; i < imgData.data.length; i += 4) {
-      if (imgData.data[i + 3] > 20 && imgData.data[i] > 100) {
-        imgData.data[i] = 255;
-        imgData.data[i + 1] = 255;
-        imgData.data[i + 2] = 255;
-        imgData.data[i + 3] = 255;
-      } else {
-        imgData.data[i] = 0;
-        imgData.data[i + 1] = 0;
-        imgData.data[i + 2] = 0;
-        imgData.data[i + 3] = 255;
-      }
-    }
-    mctx.putImageData(imgData, 0, 0);
-    maskCanvas.toBlob(async (blob) => {
-      if (blob) {
-        const file = new File([blob], 'mask.png', { type: 'image/png' });
-        const maskUrl = await uploadFile(apiKey, file);
-        setEditMask(maskUrl);
-      }
-    });
+    exportAndUploadMask();
   };
 
   const undoMask = () => {
@@ -336,6 +352,7 @@ export default function ImageStudio({ apiKey, initialSubTab = 'create', onSubTab
     const prev = maskHistory[maskHistory.length - 1];
     canvas.getContext('2d').putImageData(prev, 0, 0);
     setMaskHistory(h => h.slice(0, -1));
+    exportAndUploadMask();
   };
 
   const clearMask = () => {
@@ -389,27 +406,50 @@ export default function ImageStudio({ apiKey, initialSubTab = 'create', onSubTab
         return;
       }
 
+      setIsGenerating(true);
+      setGenerationError('');
+
+      let currentMask = editMask;
+      if (!currentMask) {
+        currentMask = await exportAndUploadMask();
+      }
+
+      if (!currentMask) {
+        setIsGenerating(false);
+        setGenerationError('Please paint a mask over the area you want to clean or replace.');
+        return;
+      }
+
       const activePrompt = editMode === 'clean_plate'
         ? (editPrompt.trim() || 'Clean plate, remove painted element, seamlessly restore natural background textures and lighting')
         : editPrompt.trim();
 
       if (editMode === 'replace' && !activePrompt && !editReference?.url) {
+        setIsGenerating(false);
         setGenerationError('Please provide a replacement prompt or a reference image.');
         return;
       }
 
-      setIsGenerating(true);
-      setGenerationError('');
       setHistoryVersion((v) => v + 1);
 
       try {
+        const compiledPrompt = compileH3InpaintPrompt({
+          mode: editMode,
+          userPrompt: activePrompt,
+          hasReference: Boolean(editReference?.url)
+        });
+
         const genParams = {
           prompt: activePrompt,
+          compiledPrompt,
           source: editSource.url,
-          mask: editMask,
+          mask: currentMask,
           reference: editReference?.url,
+          references: editReference ? [{ url: editReference.url, name: editReference.name, role: 'character_identity' }] : [],
           model: selectedModel.id,
-          resolution: resolution,
+          editMode,
+          resolution: `${sourceDim.width}x${sourceDim.height}`,
+          aspect_ratio: sourceDim.ar,
           batch_size: 1
         };
 
@@ -868,21 +908,34 @@ export default function ImageStudio({ apiKey, initialSubTab = 'create', onSubTab
                   </div>
 
                   {/* Interactive Mask Brush Canvas Overlay */}
-                  <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-black/60 border border-white/10 flex items-center justify-center">
+                  <div 
+                    style={{ aspectRatio: sourceDim.ar }}
+                    className="relative w-full max-h-[50vh] rounded-2xl overflow-hidden bg-black/60 border border-white/10 flex items-center justify-center mx-auto"
+                  >
                     <img 
                       src={editSource.url} 
                       alt="Source" 
-                      className="absolute inset-0 w-full h-full object-contain pointer-events-none select-none"
+                      onLoad={(e) => {
+                        const nw = e.target.naturalWidth || 1024;
+                        const nh = e.target.naturalHeight || 1024;
+                        const ar = `${nw} / ${nh}`;
+                        setSourceDim({ width: nw, height: nh, ar });
+                        if (canvasRef.current) {
+                          canvasRef.current.width = nw;
+                          canvasRef.current.height = nh;
+                        }
+                      }}
+                      className="w-full h-full object-cover pointer-events-none select-none"
                     />
                     <canvas
                       ref={canvasRef}
-                      width={512}
-                      height={512}
+                      width={sourceDim.width}
+                      height={sourceDim.height}
                       onMouseDown={startDrawing}
                       onMouseMove={draw}
                       onMouseUp={stopDrawing}
                       onMouseLeave={stopDrawing}
-                      className="absolute inset-0 w-full h-full object-contain cursor-crosshair z-10"
+                      className="absolute inset-0 w-full h-full cursor-crosshair z-10"
                     />
                   </div>
 

@@ -180,3 +180,25 @@ export function compileH3Prompt({
   // Return formatted H3 Ref2VA string strictly on a SINGLE LINE or space-separated sections without empty lines
   return `${windowPrefix} ${subjectDefLine} ${summaryLine} ${retentionLine} ${detailedLine} ${soundscapeLine} ${musicLine}`.trim();
 }
+
+/**
+ * MiniMax H3 Image Inpainting Compiler (Clean Plate / Replace Object)
+ */
+export function compileH3InpaintPrompt({
+  mode = 'clean_plate',
+  userPrompt = '',
+  hasReference = false,
+}) {
+  const clean = (userPrompt || '').replace(/\r?\n+/g, ' ').trim();
+  const refHeader = hasReference
+    ? `subject_definitions: <Subject 1> is the replacement reference in <Picture 1>, matching their exact features, style, and identity. summary: [image inpaint] Replace the masked region with <Subject 1>. retention_analysis: <Subject 1> is transferred into the masked area while the rest of the image is fully preserved. `
+    : '';
+
+  const action = mode === 'clean_plate'
+    ? `Inpaint and seamlessly reconstruct the masked area to blend naturally with the surrounding background textures, materials, and ambient lighting. Clean plate removal of the unwanted element without artifacts.`
+    : hasReference
+    ? `Replace the masked area with <Subject 1> from <Picture 1>. Seamlessly integrate the new element into the composition, matching perspective, lighting, depth, and shadow interactions. ${clean}`
+    : `Replace the masked area with: ${clean || 'the described subject'}. Seamlessly integrate the new element into the composition, matching perspective, lighting, depth, and shadow interactions.`;
+
+  return `${refHeader}integrated_multimodal_description: [Shot 1] Edit the image within the masked area. ${action}`.trim();
+}

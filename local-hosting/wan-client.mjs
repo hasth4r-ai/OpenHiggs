@@ -170,6 +170,7 @@ export async function generateImage({base,wanRoot,wanOutputRoot,uploadsDir,outpu
   }
 
   // Packaging inpaint source and mask if provided
+  const isInpaint = Boolean(body.source && body.mask);
   if (body.source) {
     const name = decodeURIComponent(body.source.split('/').pop());
     if (name) {
@@ -177,6 +178,7 @@ export async function generateImage({base,wanRoot,wanOutputRoot,uploadsDir,outpu
       try {
         files.push([entry, await fs.readFile(path.join(uploadsDir, name))]);
         settings.image_guide = entry;
+        settings.video_guide = entry;
       } catch {}
     }
   }
@@ -187,6 +189,7 @@ export async function generateImage({base,wanRoot,wanOutputRoot,uploadsDir,outpu
       try {
         files.push([entry, await fs.readFile(path.join(uploadsDir, name))]);
         settings.image_mask = entry;
+        settings.video_mask = entry;
       } catch {}
     }
   }
@@ -204,10 +207,16 @@ export async function generateImage({base,wanRoot,wanOutputRoot,uploadsDir,outpu
 
   const batchCount = Math.max(1, Math.min(4, Number(body.batch_size || body.batchCount || 1)));
 
+  const videoPromptType = isInpaint
+    ? (refs.length ? 'GMVAI' : 'GMVA')
+    : (refs.length ? 'I' : '');
+
+  const imageMode = isInpaint ? 2 : 1;
+
   settings.multi_prompts_gen_type = 'FG';
   Object.assign(settings, {
     model_type: defaultModelType,
-    image_mode: 1,
+    image_mode: imageMode,
     prompt: body.compiledPrompt || body.prompt,
     resolution: targetRes,
     num_inference_steps: Number(body.steps) || (isMiniMax ? 8 : 12),
@@ -217,7 +226,14 @@ export async function generateImage({base,wanRoot,wanOutputRoot,uploadsDir,outpu
     output_filename: tag,
     client_id: session,
     image_refs: refs.length ? refs : null,
-    video_prompt_type: refs.length ? 'I' : ''
+    video_prompt_type: videoPromptType,
+    denoising_strength: isInpaint ? Number(body.denoise ?? (body.editMode === 'replace' ? 0.95 : 0.85)) : 1.0,
+    masking_strength: 1,
+    mask_expand: Number(body.mask_expand ?? 16),
+    custom_settings: {
+      ...(settings.custom_settings || {}),
+      h3_mask_mode: 'shared_timestep'
+    }
   });
 
   const queueTasks = [];
