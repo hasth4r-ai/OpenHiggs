@@ -632,7 +632,7 @@ export default function VideoStudio({ apiKey, initialSubTab, onSubTabChange }) {
                       Img: {imageCount}/9 · Vid: {videoCount}/3 · Aud: {audioCount}/3
                     </span>
                   </div>
-                  <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto custom-scrollbar">
+                  <div className="flex flex-col gap-1.5 overflow-visible">
                     {references.map(ref => (
                       <div
                         key={ref.id}

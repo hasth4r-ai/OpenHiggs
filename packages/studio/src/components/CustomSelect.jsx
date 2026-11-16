@@ -14,7 +14,20 @@ export default function CustomSelect({
   align = 'left'
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [openUp, setOpenUp] = useState(false);
   const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (isOpen && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      if (spaceBelow < 190) {
+        setOpenUp(true);
+      } else {
+        setOpenUp(false);
+      }
+    }
+  }, [isOpen]);
 
   // Normalize options to [{ value, label, icon }]
   const normalizedOptions = options.map((opt) => {
@@ -93,7 +106,7 @@ export default function CustomSelect({
       {isOpen && (
         <div
           role="listbox"
-          className={`absolute z-50 mt-1 max-h-60 w-full min-w-[140px] overflow-auto rounded-xl bg-[#14141a] border border-white/10 p-1 shadow-2xl backdrop-blur-xl custom-scrollbar animate-fade-in ${
+          className={`absolute z-[999] ${openUp ? 'bottom-full mb-1' : 'top-full mt-1'} max-h-60 w-full min-w-[140px] overflow-auto rounded-xl bg-[#14141a] border border-white/10 p-1 shadow-2xl backdrop-blur-xl custom-scrollbar animate-fade-in ${
             align === 'right' ? 'right-0' : 'left-0'
           } ${menuClassName}`}
         >

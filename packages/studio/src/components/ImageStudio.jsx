@@ -555,7 +555,7 @@ export default function ImageStudio({ apiKey, initialSubTab = 'create', onSubTab
                         Images: {references.length}/{selectedModel?.maxImages || 16}
                       </span>
                     </div>
-                    <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto custom-scrollbar">
+                    <div className="flex flex-col gap-1.5 overflow-visible">
                       {references.map((ref) => (
                         <div
                           key={ref.id}

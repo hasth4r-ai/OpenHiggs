@@ -16,6 +16,27 @@ const getModelName = (item) => {
   if (item.workflow === 'motion') return 'Wan 2.1 Motion Control';
   return item.model || 'MiniMax H3';
 };
+const getAspectRatio = (item) => {
+  const ar = (item?.aspectRatio || item?.ar || '').trim();
+  if (ar === '1:1') return '1 / 1';
+  if (ar === '16:9') return '16 / 9';
+  if (ar === '9:16') return '9 / 16';
+  if (ar === '4:3') return '4 / 3';
+  if (ar === '3:4') return '3 / 4';
+  if (ar === '3:2') return '3 / 2';
+  if (ar === '2:3') return '2 / 3';
+  if (ar === '21:9') return '21 / 9';
+
+  const res = item?.resolution || item?.quality;
+  if (typeof res === 'string') {
+    const m = res.match(/^(\d+)x(\d+)/);
+    if (m && m[1] && m[2]) {
+      return `${m[1]} / ${m[2]}`;
+    }
+  }
+  return undefined;
+};
+
 const dateLabel = value => {
   const date=new Date(value),today=new Date();
   if(date.toDateString()===today.toDateString()) return 'Today';
@@ -150,12 +171,16 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
 
         // Single image in card:
         const singleUrl = images[0]?.url || mediaUrl;
+        const arStyle = view === 'masonry' ? getAspectRatio(item) : undefined;
         return (
           <img 
             key={singleUrl} 
             src={singleUrl} 
             alt={item.prompt || 'Generated image'} 
-            className="w-full h-auto object-cover select-none block rounded-xl transition-transform duration-300 group-hover:scale-[1.02]" 
+            style={arStyle ? { aspectRatio: arStyle } : undefined}
+            className={`w-full select-none block rounded-xl transition-transform duration-300 group-hover:scale-[1.02] ${
+              view === 'grid' ? 'h-full object-cover' : 'h-auto object-contain'
+            }`} 
             loading="lazy"
           />
         );
@@ -176,6 +201,7 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
             />
           );
         }
+        const arStyle = view === 'masonry' ? getAspectRatio(item) : undefined;
         return (
           <video 
             key={item.videoUrl} 
@@ -184,16 +210,60 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
             loop
             playsInline 
             preload="metadata" 
-            className="w-full h-auto object-cover select-none block aspect-video rounded-xl transition-transform duration-300 group-hover:scale-[1.02]" 
+            style={arStyle ? { aspectRatio: arStyle } : undefined}
+            className={`w-full select-none block rounded-xl transition-transform duration-300 group-hover:scale-[1.02] ${
+              view === 'grid' ? 'h-full object-cover' : 'h-auto object-contain'
+            }`} 
             aria-label={`Generated video: ${item.prompt || 'Video'}`}
           />
         );
       }
     }
 
+    const arStyle = getAspectRatio(item) || (isImage ? '1 / 1' : '16 / 9');
+
     return (
-      <div className="min-h-52 h-full flex flex-col justify-center items-center p-7 text-center gap-3 bg-[var(--bg-card,#14141a)] rounded-2xl border border-white/5">
-        {item.status==='generating'?<><span className="w-8 h-8 border-2 border-white/10 border-t-[var(--color-accent)] rounded-full animate-spin"/><p className="text-xs text-white/80">{item.phase || 'Generating…'}</p><div role="progressbar" aria-label="Generation progress" aria-valuenow={Math.round(item.progress||0)} aria-valuemin={0} aria-valuemax={100} className="w-full max-w-xs h-1.5 bg-white/10 rounded-full overflow-hidden"><div className="h-full bg-[var(--color-accent)] transition-all" style={{width:`${item.progress||0}%`}}/></div><p className="text-xs text-white/45">{Math.round(item.progress||0)}% · {time((now-Date.parse(item.createdAt))/1000)} elapsed</p><p className="text-xs text-white/45">{Number.isFinite(item.eta)?`About ${time(item.eta)} left in this sampling pass`:'Estimating remaining time…'}</p></>:<><ClapperboardIcon className="w-8 h-8 text-white/30"/><p className="text-sm text-red-300">{item.status==='cancelled'?'Generation cancelled':item.status==='interrupted'?'Generation interrupted':'Generation failed'}</p><p className="text-xs text-white/50 max-w-xs">{item.error}</p></>}
+      <div 
+        style={{ aspectRatio: arStyle }}
+        className="w-full h-full flex flex-col justify-center items-center p-3 text-center gap-1.5 bg-[#14141a] rounded-xl border-0 overflow-hidden select-none"
+      >
+        {item.status === 'generating' ? (
+          <>
+            <span className="w-6 h-6 border-2 border-white/15 border-t-[var(--color-accent)] rounded-full animate-spin flex-shrink-0" />
+            <p className="text-xs font-semibold text-white/90 truncate max-w-[90%] px-1">
+              {item.phase || 'Generating…'}
+            </p>
+            <div 
+              role="progressbar" 
+              aria-label="Generation progress" 
+              aria-valuenow={Math.round(item.progress || 0)} 
+              aria-valuemin={0} 
+              aria-valuemax={100} 
+              className="w-36 max-w-[85%] h-1.5 bg-white/10 rounded-full overflow-hidden my-0.5 flex-shrink-0"
+            >
+              <div 
+                className="h-full bg-[var(--color-accent)] transition-all duration-300" 
+                style={{ width: `${Math.max(4, Math.min(100, item.progress || 0))}%` }}
+              />
+            </div>
+            <p className="text-[11px] font-mono text-white/60 truncate max-w-[90%]">
+              {Math.round(item.progress || 0)}% · {time((now - Date.parse(item.createdAt)) / 1000)}
+            </p>
+            <p className="text-[10px] font-mono text-white/40 truncate max-w-[90%]">
+              {Number.isFinite(item.eta) ? `About ${time(item.eta)} left` : 'Estimating time…'}
+            </p>
+          </>
+        ) : (
+          <>
+            <ClapperboardIcon className="w-6 h-6 text-white/30 flex-shrink-0" />
+            <p className="text-xs font-semibold text-red-300 truncate max-w-[90%] px-1">
+              {item.status === 'cancelled' ? 'Cancelled' : item.status === 'interrupted' ? 'Interrupted' : 'Failed'}
+            </p>
+            <p className="text-[10px] text-white/50 max-w-[90%] px-1 line-clamp-2 leading-tight">
+              {item.error || 'Generation encountered an error.'}
+            </p>
+          </>
+        )}
       </div>
     );
   };
@@ -273,20 +343,20 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/5 font-mono text-white/30">{entries.length}</span>
               </h2>
 
-              {/* Masonry / Grid / List Layout - minimum 4 to 5 cards per row */}
+              {/* Masonry / Grid / List Layout - minimum 4 to 5 cards per row, 0.5rem gap */}
               <div 
                 className={
                   view === 'masonry'
-                    ? 'gap-3.5'
+                    ? 'gap-2'
                     : view === 'grid'
-                    ? 'gap-3.5'
-                    : 'flex flex-col gap-3.5'
+                    ? 'gap-2'
+                    : 'flex flex-col gap-2'
                 }
                 style={
                   view === 'masonry'
-                    ? { columnWidth: '220px', columnGap: '14px' }
+                    ? { columnWidth: '220px', columnGap: '0.5rem' }
                     : view === 'grid'
-                    ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '14px' }
+                    ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '0.5rem' }
                     : undefined
                 }
               >
@@ -314,15 +384,15 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
                           vid.currentTime = 0.1;
                         }
                       }}
-                      className={`group relative overflow-hidden rounded-xl bg-[#14141a] border border-white/5 hover:border-[var(--color-accent)]/50 transition-all duration-300 shadow-md hover:shadow-2xl cursor-pointer ${
+                      className={`group relative overflow-hidden rounded-xl bg-[#14141a] border-0 transition-all duration-300 shadow-md hover:shadow-2xl cursor-pointer ${
                         view === 'masonry' 
-                          ? 'break-inside-avoid mb-3.5 inline-block w-full align-top' 
+                          ? 'break-inside-avoid mb-2 inline-block w-full align-top' 
                           : view === 'grid' 
                           ? 'aspect-square flex items-center justify-center' 
                           : 'flex flex-col sm:flex-row'
                       }`}
                     >
-                      <div className="relative w-full h-full overflow-hidden bg-[#0c0c10] flex items-center justify-center">
+                      <div className={`relative w-full overflow-hidden bg-[#0c0c10] flex items-center justify-center ${view === 'grid' ? 'h-full' : 'h-auto'}`}>
                         {preview(item)}
 
                         {/* Hover Overlay with Metadata and Icon-Only Buttons */}
