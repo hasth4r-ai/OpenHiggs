@@ -60,14 +60,30 @@ export function validatePair(source, mask) {
   if (source.width % 2 || source.height % 2) throw new Error('Use footage with even pixel dimensions for ProRes export.');
 }
 
-export function maskFilter({invert = false, expand = 0, feather = 0} = {}) {
+export function maskFilter({invert = false, expand = 0, feather = 0, padFrames = 0} = {}) {
   const filters = ['format=gray', ...(invert ? ['negate'] : []), "lut=y='if(gte(val,128),255,0)'"];
   for (let i = 0; i < expand; i++) filters.push('dilation');
   if (feather > 0) filters.push(`gblur=sigma=${feather}`);
+  if (padFrames > 0) filters.push(`tpad=stop=${padFrames}:stop_mode=add:color=black`);
   return filters.join(',');
 }
 
-export async function normalizeMask({ffmpeg, input, output, info, invert, expand}) {
+export async function padVideo({ffmpeg, input, output, padFrames, fpsExpression}) {
+  await exec(ffmpeg, [
+    '-nostdin', '-y', '-threads', '2',
+    '-i', input,
+    '-vf', `tpad=stop=${padFrames}:stop_mode=clone`,
+    '-c:v', 'libx264',
+    '-crf', '10',
+    '-preset', 'fast',
+    '-pix_fmt', 'yuv420p',
+    '-r', fpsExpression,
+    '-an',
+    output
+  ], {windowsHide: true, maxBuffer: 4 * 1024 * 1024});
+}
+
+export async function normalizeMask({ffmpeg, input, output, info, invert, expand, padFrames = 0}) {
   const py = getPythonBin();
   const script = path.join(__dirname, 'mask-processor.py');
   const tempPre = output + '.pre.mp4';
@@ -93,8 +109,8 @@ export async function normalizeMask({ffmpeg, input, output, info, invert, expand
       '-nostdin', '-y', '-threads', '2',
       '-i', maskInput,
       '-an',
-      '-vf', maskFilter({invert: Boolean(invert), expand: ffmpegExpand}),
-      '-frames:v', String(info.frames),
+      '-vf', maskFilter({invert: Boolean(invert), expand: ffmpegExpand, padFrames}),
+      '-frames:v', String(info.frames + padFrames),
       '-r', info.fpsExpression,
       '-c:v', 'ffv1',
       '-threads', '2',

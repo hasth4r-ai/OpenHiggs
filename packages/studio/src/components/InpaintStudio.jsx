@@ -6,6 +6,7 @@ import GenerationHistory from './GenerationHistory.jsx';
 import CustomSelect from './CustomSelect.jsx';
 
 const VANCE_WORKFLOW_PROMPT = "A close shot of the reference man in a dim interior, his head tilted downward and both hands raised beside his fully uncovered face. His facial features, nose, mouth, cheeks, skin texture, and short hair match the supplied face reference. His hands are empty, with naturally curved fingers following the original movement. The space between his hands and face reveals his black shirt and the softly blurred background. Subtle purple light falls across his skin, with warm background illumination, deep shadows, soft focus, motion blur, and film grain matching the source footage. His ring, black wristwatch, and purple wristband retain their original appearance. Facial identity and anatomy remain consistent throughout the original head movement and camera motion.";
+const MINIMAX_WORKFLOW_PROMPT = "Live-action cinematic footage. Seamlessly reconstruct and inpaint the masked area to match the surrounding scene's lighting, texture, and ambient atmosphere with smooth temporal consistency.";
 
 const defaults = {
   model: 'wan21',
@@ -184,7 +185,7 @@ export default function InpaintStudio({onNavigate,initialDraft,blocked=false}) {
         {fileSlot('mask','Mask video')}
         <p className="text-xs text-white/40">White = edit. Black = keep. The mask must match the source dimensions, frame rate and frame count.</p>
         <label className="flex gap-2 text-xs text-white/70 cursor-pointer"><input type="checkbox" checked={form.invert} onChange={e=>update('invert',e.target.checked)}/>Invert mask (edit black areas)</label>
-        {info&&<p className="text-xs text-[var(--color-accent-text)]">{info.source.width} × {info.source.height} · {info.source.fps.toFixed(3)} fps · {info.source.duration.toFixed(2)}s{info.aligned?' · Mask aligned':''}</p>}
+        {info&&<p className="text-xs text-[var(--color-accent-text)]">{info.source.width} × {info.source.height} · {info.source.frames} frames · {info.source.fps.toFixed(2)} fps · {info.source.duration.toFixed(2)}s{info.aligned?' · Mask aligned':''}</p>}
 
         <div className="space-y-1.5">
           <label className="block text-xs text-white/70">Processing resolution</label>
@@ -209,10 +210,10 @@ export default function InpaintStudio({onNavigate,initialDraft,blocked=false}) {
             <span className="text-xs font-semibold">Instruction</span>
             <button
               type="button"
-              onClick={() => update('prompt', VANCE_WORKFLOW_PROMPT)}
+              onClick={() => update('prompt', form.model === 'minimax_h3' ? MINIMAX_WORKFLOW_PROMPT : VANCE_WORKFLOW_PROMPT)}
               className="text-[10px] text-[var(--color-accent-text)] hover:underline"
             >
-              Load Vance14B Workflow Prompt
+              {form.model === 'minimax_h3' ? 'Load MiniMax H3 Prompt' : 'Load Vance14B Workflow Prompt'}
             </button>
           </div>
           <textarea
@@ -220,7 +221,7 @@ export default function InpaintStudio({onNavigate,initialDraft,blocked=false}) {
             value={form.prompt}
             disabled={generating}
             onChange={e=>update('prompt',e.target.value)}
-            placeholder={VANCE_WORKFLOW_PROMPT}
+            placeholder={form.model === 'minimax_h3' ? MINIMAX_WORKFLOW_PROMPT : VANCE_WORKFLOW_PROMPT}
             className={field+' min-h-28 resize-y font-normal'}
           />
         </div>

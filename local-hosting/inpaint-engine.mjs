@@ -2,8 +2,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {call,zipFiles} from './wan-client.mjs';
-import {uploadedPath,probeVideo,validatePair,normalizeMask,compositeProRes,exportProResMaster,makePreview,PRORES} from './inpaint-media.mjs';
-import {inpaintSettings} from './inpaint-settings.mjs';
+import {uploadedPath,probeVideo,validatePair,normalizeMask,padVideo,compositeProRes,exportProResMaster,makePreview,PRORES} from './inpaint-media.mjs';
+import {inpaintSettings,calculateModelFrames} from './inpaint-settings.mjs';
 // CPU preparation can outlive Gradio's keep-alive timeout. Use fresh connections
 // and retry only read-only probes, never task submissions.
 const request=async(url,options={})=>{
@@ -33,6 +33,9 @@ export async function runInpaint({base,wanRoot,wanOutputRoot,uploadsDir,outputDi
   const bytes=(await fs.stat(source)).size+(await fs.stat(mask)).size+(reference?(await fs.stat(reference)).size:0);
   if(bytes>512*1024*1024)throw new Error('Source, mask and reference must total under 512 MB. Trim the shot or use smaller inputs.');
   const isWan21 = !body.model || body.model === 'wan21' || body.model === 'vace_14B_fusionix';
+  const targetFrames = calculateModelFrames(info.frames, isWan21 ? 'wan21' : 'minimax_h3');
+  const padFrames = targetFrames - info.frames;
+
   const defaultsFile = isWan21
     ? path.join(wanRoot, 'settings', 'vace_14B_fusionix_settings.json')
     : path.join(wanRoot, 'settings', 'minimax_h3_ref2va_pruned_settings.json');
@@ -41,15 +44,48 @@ export async function runInpaint({base,wanRoot,wanOutputRoot,uploadsDir,outputDi
     : path.join(wanRoot, 'loras', 'minimax_h3', 'Minimaxh3_VideoInpaintRef2VA.json');
   const defaults = JSON.parse(await fs.readFile(defaultsFile, 'utf8'));
   const preset = JSON.parse(await fs.readFile(presetFile, 'utf8'));
-  const settings = inpaintSettings(defaults, preset, {...body, model: isWan21 ? 'wan21' : 'minimax_h3', sourceExtension: path.extname(source), referenceExtension: reference ? path.extname(reference) : ''}, info, session);
-  const temporary=path.resolve(outputDir,'..','..','temp',tag);await fs.mkdir(temporary,{recursive:true});
-  const normalized=path.join(temporary,'mask.mkv');
-  const phase=message=>send({type:'progress',pct:0,phase:message,step:0,total:0,eta:null});
-  check();phase('Validating and preparing mask');
-  await normalizeMask({ffmpeg,input:mask,output:normalized,info,invert:!!body.invert,expand:Number(body.expand||0)});
+
+  const temporary = path.resolve(outputDir, '..', '..', 'temp', tag);
+  await fs.mkdir(temporary, {recursive: true});
+
+  let guidePath = source;
+  let guideExt = path.extname(source);
+  if (padFrames > 0) {
+    guideExt = '.mp4';
+    guidePath = path.join(temporary, `source_padded${guideExt}`);
+    phase(`Padding timeline to ${targetFrames} frames for ${isWan21 ? 'Wan 2.1' : 'MiniMax H3'} architecture`);
+    check();
+    await padVideo({ffmpeg, input: source, output: guidePath, padFrames, fpsExpression: info.fpsExpression});
+  }
+
+  const settings = inpaintSettings(
+    defaults,
+    preset,
+    {
+      ...body,
+      model: isWan21 ? 'wan21' : 'minimax_h3',
+      sourceExtension: path.extname(source),
+      guideExtension: guideExt,
+      padded: padFrames > 0,
+      referenceExtension: reference ? path.extname(reference) : ''
+    },
+    info,
+    session
+  );
+
+  const normalized = path.join(temporary, 'mask.mkv');
+  const phase = message => send({type: 'progress', pct: 0, phase: message, step: 0, total: 0, eta: null});
   check();
-  const files=[['queue.json',Buffer.from(JSON.stringify([{id:1,params:settings}]))],[settings.video_guide,await fs.readFile(source)],['mask.mkv',await fs.readFile(normalized)]];
-  if(reference)files.push([settings.image_refs[0],await fs.readFile(reference)]);
+  phase('Validating and preparing mask');
+  await normalizeMask({ffmpeg, input: mask, output: normalized, info, invert: !!body.invert, expand: Number(body.expand || 0), padFrames});
+  check();
+
+  const files = [
+    ['queue.json', Buffer.from(JSON.stringify([{id: 1, params: settings}]))],
+    [settings.video_guide, await fs.readFile(guidePath)],
+    ['mask.mkv', await fs.readFile(normalized)]
+  ];
+  if (reference) files.push([settings.image_refs[0], await fs.readFile(reference)]);
   const form=new FormData();form.append('files',new Blob([zipFiles(files)]),'inpaint.zip');
   phase('Submitting inpaint task');check();
   // Recheck after CPU preparation, before adding anything to the shared queue.
@@ -79,16 +115,49 @@ export async function runInpaint({base,wanRoot,wanOutputRoot,uploadsDir,outputDi
   const generated=await find(path.resolve(outputRoot,config.save_path||'outputs'));if(!generated)throw new Error('Wan2GP did not produce an edited video. Inspect its generation log.');
   const generatedInfo=await probeVideo(ffmpeg,generated);
   if(generatedInfo.frames < Math.min(info.frames - 2, 16) || Math.abs(generatedInfo.fps - info.fps) > 0.5)throw new Error('The model output does not match the source timeline. Original footage was preserved; no misaligned composite was exported.');
-  phase('Exporting master ProRes and preview');
-  const mov=path.join(temporary,'master.mov'),preview=path.join(temporary,'preview.mp4');
-  const abortController=new AbortController();const timer=setInterval(()=>{if(control.requested)abortController.abort();},250);
+  phase('Compositing master ProRes and preview');
+  const mov = path.join(temporary, 'master.mov'), preview = path.join(temporary, 'preview.mp4');
+  const abortController = new AbortController();
+  const timer = setInterval(() => { if (control.requested) abortController.abort(); }, 250);
   try {
-    await exportProResMaster({ffmpeg,source,generated,output:mov,info,profile:body.profile||'422hq',keepAudio:body.keepAudio!==false,signal:abortController.signal});check();
-    phase('Preparing MP4 preview');await makePreview({ffmpeg,input:mov,output:preview,signal:abortController.signal});check();
-    const finalInfo=await probeVideo(ffmpeg,mov);if(finalInfo.frames!==info.frames||finalInfo.width!==info.width||finalInfo.height!==info.height)throw new Error('Export validation failed. The original footage is unchanged.');
-    await fs.mkdir(outputDir,{recursive:true});await fs.rename(mov,path.join(outputDir,tag+'.mov'));await fs.rename(preview,path.join(outputDir,tag+'.mp4'));
-    send({type:'done',videoUrl:`/api/generations/${tag}.mp4`,fileName:tag+'.mp4',originalUrl:`/api/generations/${tag}.mov`,originalFileName:tag+'.mov',resolution:`${info.width}×${info.height}`,duration:info.duration,fps:info.fps});
-  }finally{clearInterval(timer);}
+    await compositeProRes({
+      ffmpeg,
+      source,
+      generated,
+      mask: normalized,
+      output: mov,
+      info,
+      profile: body.profile || '422hq',
+      feather: Number(body.feather ?? 4),
+      keepAudio: body.keepAudio !== false,
+      signal: abortController.signal
+    });
+    check();
+    phase('Preparing MP4 preview');
+    await makePreview({ffmpeg, input: mov, output: preview, signal: abortController.signal});
+    check();
+    const finalInfo = await probeVideo(ffmpeg, mov);
+    if (finalInfo.frames !== info.frames || finalInfo.width !== info.width || finalInfo.height !== info.height) {
+      throw new Error('Export validation failed. The original footage is unchanged.');
+    }
+    await fs.mkdir(outputDir, {recursive: true});
+    await fs.rename(mov, path.join(outputDir, tag + '.mov'));
+    await fs.rename(preview, path.join(outputDir, tag + '.mp4'));
+    send({
+      type: 'done',
+      videoUrl: `/api/generations/${tag}.mp4`,
+      fileName: tag + '.mp4',
+      originalUrl: `/api/generations/${tag}.mov`,
+      originalFileName: tag + '.mov',
+      resolution: `${info.width}×${info.height}`,
+      duration: info.duration,
+      fps: info.fps
+    });
+  } finally {
+    clearInterval(timer);
+  }
   // Only remove this job's known intermediate files. Keep Wan2GP's original output.
-  await fs.unlink(normalized).catch(()=>{});await fs.rmdir(temporary).catch(()=>{});
+  if (padFrames > 0) await fs.unlink(guidePath).catch(() => {});
+  await fs.unlink(normalized).catch(() => {});
+  await fs.rmdir(temporary).catch(() => {});
 }
