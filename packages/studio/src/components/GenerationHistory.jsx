@@ -170,6 +170,7 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
               controls 
               playsInline 
               autoPlay
+              loop
               className="max-w-full max-h-[66vh] object-contain rounded-2xl bg-black" 
               aria-label={`Generated video: ${item.prompt || 'Video'}`}
             />
@@ -183,8 +184,6 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
             loop
             playsInline 
             preload="metadata" 
-            onMouseEnter={e => e.currentTarget.play().catch(() => {})}
-            onMouseLeave={e => { e.currentTarget.pause(); e.currentTarget.currentTime = 0.1; }}
             className="w-full h-auto object-cover select-none block aspect-video rounded-xl transition-transform duration-300 group-hover:scale-[1.02]" 
             aria-label={`Generated video: ${item.prompt || 'Video'}`}
           />
@@ -301,6 +300,20 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
                     <article 
                       key={item.id}
                       onClick={() => { setSelectedVarIndex(0); setDetail(item); }}
+                      onMouseEnter={(e) => {
+                        const vid = e.currentTarget.querySelector('video');
+                        if (vid) {
+                          vid.loop = true;
+                          vid.play().catch(() => {});
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        const vid = e.currentTarget.querySelector('video');
+                        if (vid) {
+                          vid.pause();
+                          vid.currentTime = 0.1;
+                        }
+                      }}
                       className={`group relative overflow-hidden rounded-xl bg-[#14141a] border border-white/5 hover:border-[var(--color-accent)]/50 transition-all duration-300 shadow-md hover:shadow-2xl cursor-pointer ${
                         view === 'masonry' 
                           ? 'break-inside-avoid mb-3.5 inline-block w-full align-top' 
