@@ -251,6 +251,6 @@ export default function InpaintStudio({onNavigate,initialDraft,blocked=false}) {
         {status&&<p role="status" className="text-xs text-white/60">{status}</p>}{error&&<p role="alert" className="text-xs text-red-300">{error}</p>}
       </div>
     </aside>
-    <GenerationHistory refreshKey={refresh} disabled={generating} onBusyChange={setBusy} onReuse={item=>{if(item.inpaintRequest){setForm({...defaults,...item.inpaintRequest});setInfo(null);}else setError('This is a Create Video result. Switch to Create Video to reuse it.');}}/>
+    <GenerationHistory mediaType="video" refreshKey={refresh} disabled={generating} onBusyChange={setBusy} onReuse={item=>{if(item.inpaintRequest){setForm({...defaults,...item.inpaintRequest});setInfo(null);}else setError('This is a Create Video result. Switch to Create Video to reuse it.');}}/>
   </div>;
 }

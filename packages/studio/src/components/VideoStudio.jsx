@@ -1062,7 +1062,7 @@ export default function VideoStudio({ apiKey, initialSubTab, onSubTabChange }) {
         </div>
       </aside>
 
-      <GenerationHistory refreshKey={historyVersion} disabled={isGenerating} onReuse={item => {
+      <GenerationHistory mediaType="video" refreshKey={historyVersion} disabled={isGenerating} onReuse={item => {
         if(item.workflow==='inpaint'){setInpaintDraft(item.inpaintRequest);handleSubTabChange('edit');return;}
         setPrompt(item.prompt || '');
         if (Number(item.duration) > 0) setDuration((Number(item.duration) > 7.5 ? 10 : 5) + 's');

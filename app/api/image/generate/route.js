@@ -8,8 +8,8 @@ import { generateImage } from '../../../../local-hosting/wan-client.mjs';
 export const runtime = 'nodejs';
 
 function parseDimensions(ar = '1:1', res = '2048x2048') {
-  const is4K = String(res).includes('4096') || String(res).includes('4K');
-  const is1K = String(res).includes('1024') || String(res).includes('1K');
+  const is4K = String(res).includes('4096') || String(res).includes('4K') || String(res).includes('16MP');
+  const is1K = String(res).includes('1024') || String(res).includes('1K') || String(res).includes('1MP');
   
   if (ar === '16:9') return is4K ? { width: 3840, height: 2160 } : is1K ? { width: 1280, height: 720 } : { width: 1920, height: 1080 };
   if (ar === '9:16') return is4K ? { width: 2160, height: 3840 } : is1K ? { width: 720, height: 1280 } : { width: 1080, height: 1920 };
@@ -50,42 +50,69 @@ export async function POST(request) {
   const authHeader = request.headers.get('authorization') || '';
   const apiKey = authHeader.replace(/^Bearer\s+/i, '').trim() || body.apiKey || process.env.MINIMAX_API_KEY || '';
 
+  // Initial pending record in history feed (matches VideoStudio and standard platforms)
+  const record = {
+    id,
+    runId,
+    createdAt: new Date().toISOString(),
+    status: 'generating',
+    model: modelName,
+    workflow: 'image',
+    prompt: body.prompt,
+    aspectRatio: normalizedAr,
+    resolution: sizeString,
+    progress: 5,
+    phase: 'Preparing local GPU pipeline',
+    eta: null
+  };
+  try {
+    await saveGeneration(record);
+  } catch (err) {
+    console.warn('[ImageGenerate] Failed to record initial state:', err);
+  }
+
   // 1. Primary: Run directly through local Wan2GP GPU queue (100% local open-source)
   try {
     const configPath = path.join(root, 'config', 'wan-engine.json');
     const rawConfig = await fs.readFile(configPath, 'utf8');
     const config = JSON.parse(rawConfig.replace(/^\uFEFF/, ''));
     if (config.baseUrl) {
-      const res = await generateImage({
-        base: config.baseUrl,
-        wanRoot: config.wanRoot,
-        wanOutputRoot: config.wanOutputRoot,
-        uploadsDir: path.join(root, 'data', 'uploads'),
-        outputDir,
-        body: {
-          ...body,
-          resolution: sizeString
+      const res = await generateImage(
+        {
+          base: config.baseUrl,
+          wanRoot: config.wanRoot,
+          wanOutputRoot: config.wanOutputRoot,
+          uploadsDir: path.join(root, 'data', 'uploads'),
+          outputDir,
+          body: {
+            ...body,
+            resolution: sizeString
+          }
+        },
+        async (progressData) => {
+          if (progressData.type === 'progress') {
+            Object.assign(record, {
+              progress: progressData.pct,
+              phase: progressData.phase,
+              eta: progressData.eta,
+              step: progressData.step,
+              total: progressData.total
+            });
+            await saveGeneration(record).catch(() => {});
+          }
         }
-      });
+      );
+
       if (res?.fileName) {
-        const record = {
-          id,
-          runId,
-          createdAt: new Date().toISOString(),
+        Object.assign(record, {
           status: 'completed',
-          model: modelName,
-          workflow: 'image',
-          prompt: body.prompt,
-          aspectRatio: normalizedAr,
-          resolution: sizeString,
+          progress: 100,
+          phase: 'Completed',
           url: res.imageUrl,
-          fileName: res.fileName
-        };
-        try {
-          await saveGeneration(record);
-        } catch (e) {
-          console.error('[ImageGenerate] Failed to record generation:', e);
-        }
+          fileName: res.fileName,
+          completedAt: new Date().toISOString()
+        });
+        await saveGeneration(record);
         return Response.json({
           id,
           url: res.imageUrl,
@@ -98,7 +125,13 @@ export async function POST(request) {
   } catch (wanErr) {
     console.warn('[ImageGenerate] Wan2GP local generation failed/busy:', wanErr.message);
     if (!apiKey) {
-      return Response.json({ error: wanErr.message || 'Local GPU generation failed. Ensure Wan2GP is running.' }, { status: 500 });
+      Object.assign(record, {
+        status: 'failed',
+        error: wanErr.message || 'Generation failed.',
+        completedAt: new Date().toISOString()
+      });
+      await saveGeneration(record).catch(() => {});
+      return Response.json({ error: wanErr.message || 'Local GPU generation failed.' }, { status: 500 });
     }
   }
 
@@ -162,6 +195,12 @@ export async function POST(request) {
   }
 
   if (!generatedBuffer) {
+    Object.assign(record, {
+      status: 'failed',
+      error: 'Generation failed. Local Wan2GP engine is currently busy or unavailable.',
+      completedAt: new Date().toISOString()
+    });
+    await saveGeneration(record).catch(() => {});
     return Response.json({
       error: 'Generation failed. Local Wan2GP engine is currently busy or unavailable.'
     }, { status: 500 });
@@ -174,19 +213,14 @@ export async function POST(request) {
 
   const imageUrl = `/api/generations/${fileName}`;
 
-  const record = {
-    id,
-    runId,
-    createdAt: new Date().toISOString(),
+  Object.assign(record, {
     status: 'completed',
-    model: modelName,
-    workflow: 'image',
-    prompt: body.prompt,
-    aspectRatio: normalizedAr,
-    resolution: sizeString,
+    progress: 100,
+    phase: 'Completed',
     url: imageUrl,
-    fileName
-  };
+    fileName,
+    completedAt: new Date().toISOString()
+  });
 
   try {
     await saveGeneration(record);

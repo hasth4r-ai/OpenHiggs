@@ -173,9 +173,7 @@ export default function ImageStudio({ apiKey, initialSubTab = 't2i', onSubTabCha
 
     setIsGenerating(true);
     setGenerationError('');
-    setGenerationProgress(10);
-    setGenerationStatus('Initiating generation…');
-    setElapsed(0);
+    setHistoryVersion((v) => v + 1);
 
     try {
       const genParams = {
@@ -183,25 +181,21 @@ export default function ImageStudio({ apiKey, initialSubTab = 't2i', onSubTabCha
         model: selectedModel.id,
         aspect_ratio: aspectRatio,
         resolution: resolution,
-        num_inference_steps: Number.parseInt(numSteps) || 6,
+        num_inference_steps: Number.parseInt(numSteps) || 8,
         batch_size: batchCount,
         image_urls: references.map(r => r.url)
       };
-
-      setGenerationStatus('Executing MiniMax H3 Image DiT…');
-      setGenerationProgress(50);
 
       const res = subTab === 'i2i' 
         ? await generateI2I(apiKey, genParams)
         : await generateImage(apiKey, genParams);
 
-      setGenerationProgress(100);
-      setGenerationStatus('Completed');
       setHistoryVersion((v) => v + 1);
     } catch (err) {
       setGenerationError(err.message || 'Generation failed.');
     } finally {
       setIsGenerating(false);
+      setHistoryVersion((v) => v + 1);
     }
   };
 
@@ -488,16 +482,12 @@ export default function ImageStudio({ apiKey, initialSubTab = 't2i', onSubTabCha
               type="button"
               disabled={isGenerating || isUploading}
               onClick={handleGenerate}
-              className={`w-full py-3.5 rounded-xl font-black text-sm uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 shadow-xl ${
-                isGenerating
-                  ? 'bg-amber-600/30 text-amber-200 border border-amber-500/40 cursor-wait'
-                  : 'bg-[var(--color-accent)] text-white hover:opacity-95 shadow-[0_0_20px_rgba(41,54,75,0.4)] interactive-hover active:scale-[0.98]'
-              }`}
+              className="w-full bg-[var(--color-accent)] hover:opacity-90 text-white font-bold text-sm py-3.5 rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer interactive-hover active:scale-[0.98]"
             >
               {isGenerating ? (
                 <>
                   <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                  <span>{generationStatus || 'Generating Image…'}</span>
+                  <span>Generating Image…</span>
                 </>
               ) : (
                 <>
@@ -507,18 +497,10 @@ export default function ImageStudio({ apiKey, initialSubTab = 't2i', onSubTabCha
               )}
             </button>
 
-            {isGenerating && (
-              <p className="text-xs text-white/60 mt-2 text-center" aria-live="polite">
-                Elapsed: {formatTime(elapsed)} · Distilled DiT sampling pass
-              </p>
-            )}
-
             {generationError && (
-              <div className="mt-2 p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-center">
-                <p role="alert" className="text-xs text-red-300 whitespace-normal leading-relaxed">
-                  {generationError}
-                </p>
-              </div>
+              <p role="alert" className="text-xs text-red-400 mt-2 whitespace-normal text-center">
+                {generationError}
+              </p>
             )}
           </div>
         </div>

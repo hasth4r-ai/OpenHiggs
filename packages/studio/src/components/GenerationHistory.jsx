@@ -64,8 +64,9 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
   const changeView=value=>{setView(value);localStorage.setItem('openhiggs-history-view',value);};
   const copy=async item=>{try{await navigator.clipboard.writeText(item.prompt);setNotice('Prompt copied');}catch{setNotice('Could not copy. Open the details to select the prompt.');}};
   const typeFiltered = items.filter(i => {
-    if (mediaType === 'image') return i.workflow === 'image' || (!i.videoUrl && (i.url || i.imageUrl));
-    if (mediaType === 'video') return i.workflow !== 'image' && !!i.videoUrl;
+    const isImage = i.workflow === 'image' || (i.model && i.model.toLowerCase().includes('image')) || /\.(png|jpe?g|webp)$/i.test(i.fileName || i.url || '');
+    if (mediaType === 'image') return isImage;
+    if (mediaType === 'video') return !isImage;
     return true;
   });
   const filtered=typeFiltered.filter(i=>(filter==='all'||i.status===filter||(filter==='failed'&&i.status==='interrupted'))&&`${i.prompt} ${i.model} ${i.fileName}`.toLowerCase().includes(query.toLowerCase()));

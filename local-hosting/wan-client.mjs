@@ -154,7 +154,15 @@ export async function generateImage({base,wanRoot,wanOutputRoot,uploadsDir,outpu
 
   const settings=JSON.parse(await fs.readFile(path.join(wanRoot,'settings',settingsFile),'utf8'));
   const files=[];
-  const targetRes = body.resolution || '1024x1024';
+  let targetRes = body.resolution || '1024x1024';
+  if (String(targetRes).includes('4096')) {
+    targetRes = '2048x2048';
+    settings.spatial_upsampling = 'h3_vae*2';
+  } else if (String(targetRes).includes('2048')) {
+    targetRes = '2048x2048';
+  } else if (String(targetRes).includes('1024')) {
+    targetRes = '1024x1024';
+  }
 
   Object.assign(settings, {
     model_type: defaultModelType,

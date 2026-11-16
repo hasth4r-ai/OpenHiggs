@@ -537,6 +537,7 @@ export default function MotionControlStudio({ onNavigate, blocked = false }) {
           ────────────────────────────────────────────────────────── */}
       <div className="flex-1 min-w-0 h-full overflow-hidden bg-[var(--bg-app,rgb(9,9,11))]">
         <GenerationHistory
+          mediaType="video"
           refreshKey={refreshHistory}
           disabled={isGenerating}
           onReuse={(item) => {
