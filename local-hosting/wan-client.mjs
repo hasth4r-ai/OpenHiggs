@@ -169,17 +169,10 @@ export async function generateImage({base,wanRoot,wanOutputRoot,uploadsDir,outpu
     send?.({ type: 'progress', pct: 0, phase: 'Preparing local GPU pipeline…', step: 0, total: 0, eta: null });
   }
 
+  // Use locally installed Ref2VA Pruned checkpoint already downloaded on disk (no extra download)
   const isMiniMax = body.model ? String(body.model).toLowerCase().includes('minimax') : true;
-
-  // Prioritize native still image settings
-  let settingsFile = 'minimax_p_h3_image_settings.json';
-  let defaultModelType = 'minimax_p_h3_image';
-  try {
-    await fs.access(path.join(wanRoot, 'settings', settingsFile));
-  } catch {
-    settingsFile = isMiniMax ? 'minimax_h3_ref2va_pruned_settings.json' : 'ming_image_0_1_design_settings.json';
-    defaultModelType = isMiniMax ? 'minimax_h3_ref2va_pruned' : 'ming_image_0_1_design';
-  }
+  const settingsFile = isMiniMax ? 'minimax_h3_ref2va_pruned_settings.json' : 'ming_image_0_1_design_settings.json';
+  const defaultModelType = isMiniMax ? 'minimax_h3_ref2va_pruned' : 'ming_image_0_1_design';
 
   const settings=JSON.parse(await fs.readFile(path.join(wanRoot,'settings',settingsFile),'utf8'));
   const files=[];
