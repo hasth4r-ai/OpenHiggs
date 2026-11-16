@@ -1,7 +1,7 @@
 import StandaloneShell from '@/components/StandaloneShell';
 
 export const metadata = {
-  title: 'Local AI Studio',
+  title: 'OpenHiggs',
 };
 
 export default function StudioPage() {

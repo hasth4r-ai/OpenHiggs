@@ -22,7 +22,7 @@ export default function ApiKeyModal({ onSave }) {
             <FingerprintLogoIcon className="w-9 h-9 text-white/90" />
           </div>
           <h1 className="text-2xl font-black text-white tracking-wider mb-2">
-            Local AI Studio
+            OpenHiggs
           </h1>
           <p className="text-white/40 text-sm">
             Enter your <a href="https://muapi.ai" target="_blank" rel="noreferrer" className="text-white/80 hover:underline">Muapi.ai</a> API key to start generating

@@ -1,8 +1,8 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'Local AI Studio',
-  description: 'Local AI creative studio powered by MiniMax H3 and Wan2GP.',
+  title: 'OpenHiggs',
+  description: 'Self-hosted open-source AI video, inpainting, and cinema studio.',
 };
 
 export default function RootLayout({ children }) {

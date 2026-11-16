@@ -51,7 +51,7 @@ export default function StandaloneShell() {
         <div className="flex flex-col items-center gap-6 w-full">
           {/* Fingerprint Logo */}
           <div 
-            title="Local AI Studio"
+            title="OpenHiggs"
             className="w-10 h-10 rounded-xl bg-[var(--color-accent-subtle)] flex items-center justify-center text-[var(--color-accent)] shadow-sm cursor-pointer hover:opacity-90 transition-opacity"
             onClick={() => switchTab('video')}
           >
@@ -135,7 +135,7 @@ export default function StandaloneShell() {
                 <div className="w-8 h-8 rounded-xl bg-[var(--color-accent-subtle)] flex items-center justify-center text-[var(--color-accent)]">
                   <FingerprintLogoIcon className="w-5 h-5 text-white/90" />
                 </div>
-                <h2 id="local-settings-title" className="text-white font-bold text-lg">Local AI Studio</h2>
+                <h2 id="local-settings-title" className="text-white font-bold text-lg">OpenHiggs</h2>
               </div>
               <button onClick={() => setShowSettings(false)} className="text-white/40 hover:text-white p-1 text-sm">✕</button>
             </div>

@@ -21,7 +21,7 @@ function createWindow() {
         titleBarStyle: 'hiddenInset',
         backgroundColor: '#0d0d0d',
         show: false,
-        title: 'Open Higgsfield AI',
+        title: 'OpenHiggs',
     });
 
     const indexPath = path.join(__dirname, '../dist/index.html');

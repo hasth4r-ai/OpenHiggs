@@ -1,6 +1,6 @@
 {
-  "name": "open-higgsfield-ai",
-  "description": "Open-source alternative to Higgsfield AI — AI image, video, cinema and lip sync studio",
+  "name": "openhiggs",
+  "description": "OpenHiggs — Self-hosted open-source AI video, inpainting, and cinema studio",
   "private": true,
   "version": "1.0.0",
   "workspaces": [
@@ -20,9 +20,9 @@
     "electron:build:all": "vite build && electron-builder --mac --win"
   },
   "build": {
-    "appId": "ai.higgsfield.open",
-    "productName": "Open Higgsfield AI",
-    "copyright": "Copyright © 2025",
+    "appId": "ai.openhiggs.desktop",
+    "productName": "OpenHiggs",
+    "copyright": "Copyright © 2026",
     "directories": { "output": "release" },
     "afterPack": "./afterPack.js",
     "files": ["dist/**/*", "electron/**/*"],
