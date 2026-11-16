@@ -443,6 +443,22 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
                     </div>
                   )}
 
+                  {detail.references && detail.references.length > 0 && (
+                    <div>
+                      <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Attached References ({detail.references.length})</span>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {detail.references.map((r, i) => (
+                          <div key={r.id || i} className="relative w-12 h-12 rounded-xl overflow-hidden bg-black/60 border border-white/10 group">
+                            <img src={r.url} alt={r.name || `Ref ${i + 1}`} className="w-full h-full object-cover" />
+                            <span className="absolute bottom-0.5 right-0.5 bg-black/80 px-1 py-0.2 rounded text-[8px] font-mono text-[var(--color-accent-text)]">
+                              {r.tag || `@image${i + 1}`}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-2.5 pt-2">
                     {detail.resolution && (
                       <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">

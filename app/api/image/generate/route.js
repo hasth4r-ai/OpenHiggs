@@ -61,6 +61,8 @@ export async function POST(request) {
     model: modelName,
     workflow: 'image',
     prompt: body.prompt,
+    compiledPrompt: body.compiledPrompt || '',
+    references: Array.isArray(body.references) ? body.references : [],
     aspectRatio: normalizedAr,
     resolution: sizeString,
     batchCount,
@@ -89,6 +91,9 @@ export async function POST(request) {
           outputDir,
           body: {
             ...body,
+            prompt: body.prompt,
+            compiledPrompt: body.compiledPrompt || '',
+            references: Array.isArray(body.references) ? body.references : [],
             batch_size: batchCount,
             resolution: sizeString
           }
@@ -120,6 +125,8 @@ export async function POST(request) {
           fileName: res.fileName,
           images,
           batchCount: images.length,
+          references: Array.isArray(body.references) ? body.references : [],
+          compiledPrompt: body.compiledPrompt || '',
           completedAt: new Date().toISOString()
         });
         await saveGeneration(record);

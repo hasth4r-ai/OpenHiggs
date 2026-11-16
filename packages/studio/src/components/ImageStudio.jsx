@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import CustomSelect from './CustomSelect.jsx';
 import GenerationHistory from './GenerationHistory.jsx';
+import { compileH3Prompt } from '../h3Compiler.js';
 import { 
   SparkleIcon, 
   ImageIcon, 
@@ -12,7 +13,8 @@ import {
   TrashIcon, 
   RefreshIcon,
   LayersIcon,
-  UndoIcon
+  UndoIcon,
+  ArrowRightIcon
 } from './icons.jsx';
 import { generateImage, generateI2I, uploadFile, LOCAL_ENGINE_CONNECTED, LOCAL_UPLOADS_ENABLED } from '../local.js';
 import { 
@@ -74,6 +76,8 @@ export default function ImageStudio({ apiKey, initialSubTab = 'create', onSubTab
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [showElementsMenu, setShowElementsMenu] = useState(false);
+  const [showCompiledPrompt, setShowCompiledPrompt] = useState(false);
 
   // Edit Image state (Clean Plate / Replace)
   const [editSource, setEditSource] = useState(null); // { url, name }
@@ -116,6 +120,74 @@ export default function ImageStudio({ apiKey, initialSubTab = 'create', onSubTab
     textareaRef.current?.focus();
   };
 
+  // Add reference helper
+  const addReferenceItem = (url, name) => {
+    setReferences((prev) => {
+      const nextIdx = prev.length + 1;
+      const tag = `@image${nextIdx}`;
+      let defaultRole = 'character_identity';
+      if (nextIdx === 2) defaultRole = 'costume_style';
+      else if (nextIdx === 3) defaultRole = 'environment';
+
+      return [
+        ...prev,
+        {
+          id: Date.now().toString() + Math.random(),
+          type: 'image',
+          tag,
+          name: name || `image_${nextIdx}`,
+          url,
+          role: defaultRole,
+        },
+      ];
+    });
+  };
+
+  const updateReferenceRole = (id, newRole) => {
+    setReferences((prev) => prev.map((r) => (r.id === id ? { ...r, role: newRole } : r)));
+  };
+
+  const removeReference = (id) => {
+    setReferences((prev) => {
+      const next = prev.filter((r) => r.id !== id);
+      return next.map((r, i) => ({ ...r, tag: `@image${i + 1}` }));
+    });
+  };
+
+  const insertTagIntoPrompt = (tag) => {
+    const ta = textareaRef.current;
+    if (!ta) {
+      setPrompt((p) => (p ? `${p} ${tag}` : tag));
+      return;
+    }
+    const start = ta.selectionStart ?? prompt.length;
+    const end = ta.selectionEnd ?? prompt.length;
+    const newText =
+      prompt.slice(0, start) +
+      (start > 0 && prompt[start - 1] !== ' ' ? ' ' : '') +
+      tag +
+      ' ' +
+      prompt.slice(end);
+    setPrompt(newText);
+    setTimeout(() => {
+      ta.focus();
+      const pos = start + tag.length + (start > 0 && prompt[start - 1] !== ' ' ? 2 : 1);
+      ta.setSelectionRange(pos, pos);
+    }, 10);
+  };
+
+  // Clipboard paste listener (<kbd>Ctrl</kbd> + <kbd>V</kbd>)
+  useEffect(() => {
+    const handlePaste = (e) => {
+      if (subTab === 'edit') return;
+      if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length > 0) {
+        handleFileUpload(e.clipboardData.files);
+      }
+    };
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [references, subTab]);
+
   // Upload handler for reference images
   const handleFileUpload = async (files) => {
     if (!files || files.length === 0) return;
@@ -129,27 +201,27 @@ export default function ImageStudio({ apiKey, initialSubTab = 'create', onSubTab
     setUploadProgress(10);
 
     try {
-      const newRefs = [...references];
       for (const file of Array.from(files)) {
-        if (newRefs.length >= maxRefs) break;
+        if (references.length >= maxRefs) break;
         if (!file.type.startsWith('image/')) continue;
-        
         const url = await uploadFile(apiKey, file, (pct) => setUploadProgress(pct));
-        newRefs.push({
-          id: Math.random().toString(36).substring(7),
-          name: file.name,
-          url,
-          tag: `Image ${newRefs.length + 1}`
-        });
+        addReferenceItem(url, file.name);
       }
-      setReferences(newRefs);
     } catch (err) {
       alert(`Upload failed: ${err.message}`);
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
+
+  // Compile Ref2VA prompt live
+  const compiledH3Prompt = compileH3Prompt({
+    userPrompt: prompt,
+    references,
+    mode: 'image',
+  });
 
   // Upload handler for source image in Edit Image
   const handleEditSourceUpload = async (file) => {
@@ -181,9 +253,6 @@ export default function ImageStudio({ apiKey, initialSubTab = 'create', onSubTab
     }
   };
 
-  const removeReference = (index) => {
-    setReferences((prev) => prev.filter((_, i) => i !== index));
-  };
 
   // Canvas drawing handlers for Edit Image mask brush
   const startDrawing = (e) => {
@@ -295,6 +364,8 @@ export default function ImageStudio({ apiKey, initialSubTab = 'create', onSubTab
       try {
         const genParams = {
           prompt: textPrompt,
+          compiledPrompt: compiledH3Prompt,
+          references,
           model: selectedModel.id,
           aspect_ratio: aspectRatio,
           resolution: resolution,
@@ -473,22 +544,63 @@ export default function ImageStudio({ apiKey, initialSubTab = 'create', onSubTab
                   <p className="text-[10px] text-white/30 mt-1">Drop files here or Paste from Clipboard (Ctrl+V)</p>
                 </div>
 
-                {/* Uploaded References Thumbnails */}
+                {/* Reference Chips / Tray (When files exist) */}
                 {references.length > 0 && (
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {references.map((ref, idx) => (
-                      <div key={ref.id || idx} className="relative group w-14 h-14 rounded-xl overflow-hidden bg-black/60 border border-white/10 shadow-md">
-                        <img src={ref.url} alt={ref.name} className="w-full h-full object-cover" />
-                        <button
-                          type="button"
-                          onClick={() => removeReference(idx)}
-                          title="Remove image"
-                          className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-red-400"
+                  <div className="flex flex-col gap-2 bg-[#18181f] p-2.5 rounded-2xl">
+                    <div className="flex items-center justify-between px-1">
+                      <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest">
+                        Attached Elements ({references.length})
+                      </span>
+                      <span className="text-[9px] text-white/40">
+                        Images: {references.length}/{selectedModel?.maxImages || 16}
+                      </span>
+                    </div>
+                    <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto custom-scrollbar">
+                      {references.map((ref) => (
+                        <div
+                          key={ref.id}
+                          className="flex items-center justify-between gap-2 bg-[#22222b] p-1.5 rounded-xl hover:bg-[#282833] transition-all"
                         >
-                          <TrashIcon className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-8 h-8 rounded-lg overflow-hidden bg-black/60 flex-shrink-0 flex items-center justify-center">
+                              <img src={ref.url} alt="" className="w-full h-full object-cover" />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => insertTagIntoPrompt(ref.tag)}
+                              title={`Click to insert ${ref.tag} into prompt`}
+                              className="text-xs font-mono font-bold text-[var(--color-accent-text)] hover:underline flex-shrink-0 cursor-pointer"
+                            >
+                              {ref.tag}
+                            </button>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-end">
+                            <div className="w-32">
+                              <CustomSelect
+                                value={ref.role}
+                                onChange={(e) => updateReferenceRole(ref.id, e.target.value)}
+                                size="sm"
+                                className="!py-1 !px-2 !text-[10px] !rounded-md"
+                                options={[
+                                  ['character_identity', 'Character / Face'],
+                                  ['costume_style', 'Costume / Outfit'],
+                                  ['environment', 'Environment / Style']
+                                ]}
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeReference(ref.id)}
+                              className="text-white/40 hover:text-red-400 p-1 transition-colors cursor-pointer"
+                              title="Remove"
+                            >
+                              <CloseIcon className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -503,25 +615,96 @@ export default function ImageStudio({ apiKey, initialSubTab = 'create', onSubTab
               </div>
 
               {/* Prompt Section */}
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
-                  <label htmlFor="image-prompt" className="text-xs font-bold text-white/80">
+                  <label htmlFor="image-prompt" className="text-xs font-bold text-white tracking-wide">
                     Prompt
                   </label>
-                  <span className="text-[10px] text-white/40 font-mono">
-                    {prompt.length} chars
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowCompiledPrompt((s) => !s)}
+                    className="text-[10px] text-[var(--color-accent-text)] hover:underline font-mono cursor-pointer"
+                  >
+                    {showCompiledPrompt ? 'Hide H3 Syntax ▲' : 'Inspect H3 Syntax ▼'}
+                  </button>
                 </div>
 
-                <textarea
-                  id="image-prompt"
-                  ref={textareaRef}
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  placeholder="Describe the image in rich detail. MiniMax H3 Image DiT natively excels with scene architecture, atmospheric lighting, and high-frequency textures..."
-                  rows={4}
-                  className="w-full bg-[#18181f] border border-white/5 focus:border-[var(--color-accent)] rounded-2xl p-3.5 text-xs text-white placeholder-white/30 focus:outline-none transition-all resize-none custom-scrollbar leading-relaxed"
-                />
+                <div className="relative">
+                  <textarea
+                    id="image-prompt"
+                    ref={textareaRef}
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    placeholder="Describe the image. Refer to inputs as @image1, @image2, or describe the scene. Add elements using @"
+                    rows={4}
+                    className="w-full bg-[#18181f] border border-white/5 focus:border-[var(--color-accent)] rounded-2xl p-3.5 text-xs text-white placeholder-white/30 focus:outline-none transition-all resize-none custom-scrollbar leading-relaxed"
+                  />
+
+                  {/* @ Elements Quick Button */}
+                  <div className="flex items-center justify-between mt-1 px-1">
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowElementsMenu((s) => !s)}
+                        className="text-[11px] font-bold text-white/70 hover:text-white bg-white/5 hover:bg-white/10 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 interactive-hover cursor-pointer"
+                      >
+                        <SparkleIcon className="w-3 h-3 text-[var(--color-accent-text)]" />
+                        <span>@ Elements</span>
+                      </button>
+
+                      {/* Dropdown Menu for Elements */}
+                      {showElementsMenu && (
+                        <div className="absolute left-0 top-full mt-1.5 w-48 bg-[#18181f] border border-white/10 rounded-xl shadow-2xl p-1.5 z-30 flex flex-col gap-1 backdrop-blur-xl">
+                          {references.length === 0 ? (
+                            <span className="text-[10px] text-white/40 p-2 text-center">
+                              No attached references yet
+                            </span>
+                          ) : (
+                            references.map((r) => (
+                              <button
+                                key={r.id}
+                                type="button"
+                                onClick={() => {
+                                  insertTagIntoPrompt(r.tag);
+                                  setShowElementsMenu(false);
+                                }}
+                                className="flex items-center gap-2 p-1.5 hover:bg-white/10 rounded-lg text-left transition-all cursor-pointer"
+                              >
+                                <span className="text-xs font-mono font-bold text-[var(--color-accent-text)]">
+                                  {r.tag}
+                                </span>
+                                <span className="text-[10px] text-white/60 truncate">
+                                  ({r.role.replace('_', ' ')})
+                                </span>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <span className="text-[10px] font-mono text-white/40">
+                      {prompt.length} chars
+                    </span>
+                  </div>
+                </div>
+
+                {/* Compiled H3 Syntax Live Inspection Accordion */}
+                {showCompiledPrompt && (
+                  <div className="bg-[#121216] border border-white/10 rounded-xl p-3 flex flex-col gap-1.5 mt-1 animate-fade-in">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-[var(--color-accent-text)] font-bold">
+                        Ref2VA Compiled Prompt
+                      </span>
+                      <span className="text-[9px] text-white/40 font-mono">
+                        Sent to H3 Engine
+                      </span>
+                    </div>
+                    <pre className="text-[10px] font-mono text-white/80 whitespace-pre-wrap break-words leading-relaxed max-h-36 overflow-y-auto custom-scrollbar bg-black/40 p-2 rounded-lg">
+                      {compiledH3Prompt || 'Prompt is empty.'}
+                    </pre>
+                  </div>
+                )}
 
                 {/* Quick Enhancer Tags */}
                 <div className="flex flex-wrap gap-1.5 pt-1">
@@ -530,7 +713,7 @@ export default function ImageStudio({ apiKey, initialSubTab = 'create', onSubTab
                       key={tag}
                       type="button"
                       onClick={() => addTag(tag)}
-                      className="text-[10px] font-semibold text-white/60 hover:text-white bg-white/5 hover:bg-white/10 px-2 py-1 rounded-lg transition-all"
+                      className="text-[10px] font-semibold text-white/60 hover:text-white bg-white/5 hover:bg-white/10 px-2 py-1 rounded-lg transition-all cursor-pointer"
                     >
                       + {tag}
                     </button>

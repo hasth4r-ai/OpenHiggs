@@ -191,22 +191,23 @@ export async function generateImage({base,wanRoot,wanOutputRoot,uploadsDir,outpu
     }
   }
 
-  let targetRes = body.resolution || '1024x1024';
-  if (String(targetRes).includes('4096')) {
-    targetRes = '2048x2048';
-    settings.spatial_upsampling = 'h3_vae*2';
-  } else if (String(targetRes).includes('2048')) {
-    targetRes = '2048x2048';
-  } else if (String(targetRes).includes('1024')) {
-    targetRes = '1024x1024';
-  }
+  let targetRes = '1024x1024';
+  const ar = body.aspect_ratio || body.ar || '1:1';
+  if (ar === '16:9') targetRes = '1280x720';
+  else if (ar === '9:16') targetRes = '720x1280';
+  else if (ar === '4:3') targetRes = '1024x768';
+  else if (ar === '3:4') targetRes = '768x1024';
+  else if (ar === '3:2') targetRes = '1152x768';
+  else if (ar === '2:3') targetRes = '768x1152';
+  else if (ar === '21:9') targetRes = '1280x550';
+  else targetRes = '1024x1024';
 
   const batchCount = Math.max(1, Math.min(4, Number(body.batch_size || body.batchCount || 1)));
 
   Object.assign(settings, {
     model_type: defaultModelType,
     image_mode: 1,
-    prompt: body.prompt,
+    prompt: body.compiledPrompt || body.prompt,
     resolution: targetRes,
     num_inference_steps: Number(body.steps) || (isMiniMax ? 8 : 12),
     batch_size: 1,

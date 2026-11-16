@@ -10,6 +10,7 @@ export function compileH3Prompt({
   duration = 5,
   preset = 'general',
   cameraMotion = '',
+  mode = 'video',
 }) {
   const cleanPrompt = (userPrompt || '').trim();
 
@@ -18,10 +19,17 @@ export function compileH3Prompt({
     return '';
   }
 
-  // Group references
-  const imageRefs = references.filter(r => r.type === 'image');
-  const videoRefs = references.filter(r => r.type === 'video');
-  const audioRefs = references.filter(r => r.type === 'audio');
+  const isImageMode = mode === 'image';
+
+  // Group references - handle both { type: 'image' } and legacy objects
+  const imageRefs = references.filter(r => !r.type || r.type === 'image');
+  const videoRefs = isImageMode ? [] : references.filter(r => r.type === 'video');
+  const audioRefs = isImageMode ? [] : references.filter(r => r.type === 'audio');
+
+  // If there are no references at all, return the clean user prompt directly
+  if (imageRefs.length === 0 && videoRefs.length === 0 && audioRefs.length === 0) {
+    return cleanPrompt;
+  }
 
   // 1. subject_definitions
   const subjectDefs = [];
@@ -31,9 +39,14 @@ export function compileH3Prompt({
   imageRefs.forEach((ref, idx) => {
     const picNum = idx + 1;
     const sNum = subjectIdx++;
-    tagToSubjectMap.set(ref.tag.toLowerCase(), `<Subject ${sNum}>`);
+    if (ref.tag) {
+      tagToSubjectMap.set(ref.tag.toLowerCase(), `<Subject ${sNum}>`);
+    }
+    tagToSubjectMap.set(`@image${picNum}`.toLowerCase(), `<Subject ${sNum}>`);
     tagToSubjectMap.set(`image ${picNum}`.toLowerCase(), `<Subject ${sNum}>`);
     tagToSubjectMap.set(`image${picNum}`.toLowerCase(), `<Subject ${sNum}>`);
+    tagToSubjectMap.set(`picture ${picNum}`.toLowerCase(), `<Subject ${sNum}>`);
+    tagToSubjectMap.set(`picture${picNum}`.toLowerCase(), `<Subject ${sNum}>`);
 
     if (ref.role === 'costume_style' || ref.role === 'costume') {
       subjectDefs.push(`<Subject ${sNum}> is the costume/outfit from <Picture ${picNum}>, preserving clothing shape, style, fabric texture, and color.`);
@@ -67,11 +80,11 @@ export function compileH3Prompt({
 
   const subjectDefLine = subjectDefs.length > 0 
     ? `subject_definitions: ${subjectDefs.join(' ')}`
-    : `subject_definitions: <Subject 1> is the primary subject of the video.`;
+    : `subject_definitions: <Subject 1> is the primary subject.`;
 
   // 2. summary
   const taskTags = [];
-  if (references.length > 0) taskTags.push('reference generation');
+  if (imageRefs.length > 0) taskTags.push('reference generation');
   if (videoRefs.length > 0) taskTags.push('camera motion transfer');
   if (audioRefs.length > 0) taskTags.push('audio reference');
   const tagPrefix = taskTags.length > 0 ? `[${taskTags.join(' + ')}] ` : '';
@@ -81,17 +94,18 @@ export function compileH3Prompt({
   // 3. retention_analysis
   const retentionParts = [];
   imageRefs.forEach((ref, idx) => {
-    const sTag = tagToSubjectMap.get(ref.tag.toLowerCase()) || `<Subject ${idx + 1}>`;
+    const sTag = tagToSubjectMap.get((ref.tag || '').toLowerCase()) || `<Subject ${idx + 1}>`;
+    const picTag = `<Picture ${idx + 1}>`;
     if (ref.role === 'costume_style' || ref.role === 'costume') {
-      retentionParts.push(`${sTag} (appears in [Shot 1]): attribute_transfer - garment structure, fabric texture, and color palette are transferred; surrounding background is not copied.`);
-    } else if (ref.role === 'environment') {
-      retentionParts.push(`${sTag} (appears in [Shot 1]): attribute_transfer - lighting tone, color grade, and atmosphere are transferred.`);
+      retentionParts.push(`${sTag} (appears in composition): attribute_transfer - garment structure, fabric texture, and color palette are transferred; surrounding background is not copied.`);
+    } else if (ref.role === 'environment' || ref.role === 'style') {
+      retentionParts.push(`${sTag} (appears in composition): attribute_transfer - lighting tone, color grade, and atmosphere are transferred.`);
     } else if (ref.role === 'keyframe_start') {
-      retentionParts.push(`${sTag} (anchors [Shot 1] start): keyframe_transition - the animation commences directly from <Picture ${idx + 1}>.`);
+      retentionParts.push(`${sTag} (anchors sequence start): keyframe_transition - the composition commences directly from ${picTag}.`);
     } else if (ref.role === 'keyframe_end') {
-      retentionParts.push(`${sTag} (anchors [Shot 1] end): keyframe_transition - the animation seamlessly converges toward <Picture ${idx + 1}>.`);
+      retentionParts.push(`${sTag} (anchors sequence end): keyframe_transition - the composition converges toward ${picTag}.`);
     } else {
-      retentionParts.push(`${sTag} (appears in [Shot 1]): fully_preserved - facial features, identity, hair, and recognizable physical appearance are strictly retained.`);
+      retentionParts.push(`${sTag} (appears in composition): fully_preserved - facial features, identity, hair, and recognizable physical appearance are strictly retained.`);
     }
   });
 
@@ -107,7 +121,7 @@ export function compileH3Prompt({
 
   const retentionLine = retentionParts.length > 0
     ? `retention_analysis: ${retentionParts.join(' ')}`
-    : `retention_analysis: <Subject 1> (appears in [Shot 1]): fully_preserved - physical appearance and motion coherence are maintained.`;
+    : `retention_analysis: <Subject 1> (appears in composition): fully_preserved - physical appearance and coherence are maintained.`;
 
   // 4. detailed_description
   // Replace @image1, @video1 mentions in user prompt with <Subject N>
@@ -116,6 +130,17 @@ export function compileH3Prompt({
     const regex = new RegExp(tag.replace(/([.*+?^=!:${}()|\[\]\/\\])/g, '\\$1'), 'gi');
     translatedBody = translatedBody.replace(regex, replacement);
   });
+
+  // Ensure subjects appear in the prompt body if user didn't mention them explicitly
+  if (imageRefs.length > 0 && !translatedBody.includes('<Subject')) {
+    const subjectsList = imageRefs.map((_, i) => `<Subject ${i + 1}>`).join(' and ');
+    translatedBody = `Featuring ${subjectsList}, ${translatedBody}`;
+  }
+
+  if (isImageMode) {
+    const detailedLine = `detailed_description: The output is a high-resolution photorealistic still photograph. ${translatedBody || '<Subject 1> is featured prominently in the scene'}. Composition, skin textures, lighting, and fine materials are rendered with exquisite clarity and depth.`;
+    return `${subjectDefLine} ${summaryLine} ${retentionLine} ${detailedLine}`.trim();
+  }
 
   let cameraInstruction = '';
   if (preset === 'tracking' || cameraMotion === 'tracking') {
