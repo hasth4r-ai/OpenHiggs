@@ -29,9 +29,9 @@ function getUrlForTab(tab, subTab) {
     return '/video/create';
   }
   if (tab === 'image') {
-    const sub = subTab || 't2i';
-    if (sub === 'i2i') return '/image/i2i';
-    return '/image/t2i';
+    const sub = subTab || 'create';
+    if (sub === 'edit' || sub === 'i2i') return '/image/edit';
+    return '/image/create';
   }
   if (tab === 'lipsync' || tab === 'audio') {
     const sub = subTab || 'image';
@@ -51,8 +51,8 @@ function getPageTitle(tab, subTab) {
     return 'OpenHiggs · Create Video';
   }
   if (tab === 'image') {
-    if (subTab === 'i2i') return 'OpenHiggs · Image to Image';
-    return 'OpenHiggs · Text to Image';
+    if (subTab === 'edit' || subTab === 'i2i') return 'OpenHiggs · Edit Image';
+    return 'OpenHiggs · Create Image';
   }
   if (tab === 'lipsync' || tab === 'audio') {
     if (subTab === 'video') return 'OpenHiggs · Video LipSync';
@@ -74,11 +74,11 @@ function parsePathname(pathname) {
   if (p.startsWith('/video')) {
     return { tab: 'video', subTab: 'create' };
   }
-  if (p.startsWith('/image/i2i')) {
-    return { tab: 'image', subTab: 'i2i' };
+  if (p.startsWith('/image/edit') || p.startsWith('/image/i2i')) {
+    return { tab: 'image', subTab: 'edit' };
   }
   if (p.startsWith('/image')) {
-    return { tab: 'image', subTab: 't2i' };
+    return { tab: 'image', subTab: 'create' };
   }
   if (p.startsWith('/audio/video') || p.startsWith('/lipsync/video')) {
     return { tab: 'lipsync', subTab: 'video' };
@@ -95,7 +95,7 @@ function parsePathname(pathname) {
 export default function StandaloneShell({ initialTab = 'video', initialSubTab = null }) {
   const [activeTab, setActiveTab] = useState(initialTab);
   const [videoSubTab, setVideoSubTab] = useState(() => initialTab === 'video' ? (initialSubTab || 'create') : 'create');
-  const [imageSubTab, setImageSubTab] = useState(() => initialTab === 'image' ? (initialSubTab || 't2i') : 't2i');
+  const [imageSubTab, setImageSubTab] = useState(() => initialTab === 'image' ? (initialSubTab === 'i2i' || initialSubTab === 'edit' ? 'edit' : 'create') : 'create');
   const [audioSubTab, setAudioSubTab] = useState(() => (initialTab === 'lipsync' || initialTab === 'audio') ? (initialSubTab || 'image') : 'image');
   const [showSettings, setShowSettings] = useState(false);
 

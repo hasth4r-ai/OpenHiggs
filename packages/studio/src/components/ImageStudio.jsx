@@ -11,7 +11,8 @@ import {
   PlusIcon, 
   TrashIcon, 
   RefreshIcon,
-  ChevronDownIcon
+  LayersIcon,
+  UndoIcon
 } from './icons.jsx';
 import { generateImage, generateI2I, uploadFile, LOCAL_ENGINE_CONNECTED, LOCAL_UPLOADS_ENABLED } from '../local.js';
 import { 
@@ -19,10 +20,7 @@ import {
   i2iModels, 
   getModelById, 
   getAspectRatiosForModel, 
-  getResolutionsForModel,
-  getAspectRatiosForI2IModel,
-  getResolutionsForI2IModel,
-  getMaxImagesForI2IModel
+  getResolutionsForModel 
 } from '../models.js';
 
 const QUICK_TAGS = [
@@ -51,68 +49,63 @@ function getModelIcon(model) {
   return null;
 }
 
-export default function ImageStudio({ apiKey, initialSubTab = 't2i', onSubTabChange }) {
-  // Sub-tabs: 't2i' (Text to Image) | 'i2i' (Image to Image / Multi-Ref)
-  const [subTab, setSubTab] = useState(() => (initialSubTab === 'i2i' ? 'i2i' : 't2i'));
+export default function ImageStudio({ apiKey, initialSubTab = 'create', onSubTabChange }) {
+  // Main tabs: 'create' (Create Image) | 'edit' (Edit Image)
+  const normalizeTab = (tab) => (tab === 'edit' || tab === 'i2i') ? 'edit' : 'create';
+  const [subTab, setSubTab] = useState(() => normalizeTab(initialSubTab));
+
+  // Edit sub-modes: 'clean_plate' (Remove / Clean plate) | 'replace' (Replace Object / Face)
+  const [editMode, setEditMode] = useState('clean_plate');
 
   // Active Model
-  const currentModelList = subTab === 'i2i' ? i2iModels : t2iModels;
-  const [selectedModel, setSelectedModel] = useState(currentModelList[0] || t2iModels[0]);
+  const [selectedModel, setSelectedModel] = useState(t2iModels[0]);
   const [showModelModal, setShowModelModal] = useState(false);
   const [modelSearch, setModelSearch] = useState('');
 
-  // Prompt & Parameters
+  // Prompt & Parameters for Create Image
   const [prompt, setPrompt] = useState('');
   const [aspectRatio, setAspectRatio] = useState('1:1');
   const [resolution, setResolution] = useState('2048x2048 (4MP)');
   const [numSteps, setNumSteps] = useState('6');
   const [batchCount, setBatchCount] = useState(1);
 
-  // References state (up to 16 reference images for MiniMax H3 Image)
+  // References state (up to 16 reference images)
   const [references, setReferences] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isDragOver, setIsDragOver] = useState(false);
 
+  // Edit Image state (Clean Plate / Replace)
+  const [editSource, setEditSource] = useState(null); // { url, name }
+  const [editMask, setEditMask] = useState(null);
+  const [editPrompt, setEditPrompt] = useState('');
+  const [editReference, setEditReference] = useState(null);
+  const [brushSize, setBrushSize] = useState(36);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [maskHistory, setMaskHistory] = useState([]);
+
   // Generation state
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generationProgress, setGenerationProgress] = useState(0);
-  const [generationStatus, setGenerationStatus] = useState('');
   const [generationError, setGenerationError] = useState('');
   const [historyVersion, setHistoryVersion] = useState(0);
-  const [elapsed, setElapsed] = useState(0);
 
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
+  const editSourceInputRef = useRef(null);
+  const editRefInputRef = useRef(null);
+  const canvasRef = useRef(null);
 
   // Sync subTab prop from URL routing
   useEffect(() => {
-    if (initialSubTab && ['t2i', 'i2i'].includes(initialSubTab)) {
-      setSubTab(initialSubTab);
+    if (initialSubTab) {
+      setSubTab(normalizeTab(initialSubTab));
     }
   }, [initialSubTab]);
 
-  // Update models when subTab changes
-  useEffect(() => {
-    const list = subTab === 'i2i' ? i2iModels : t2iModels;
-    setSelectedModel(list[0]);
-    const ars = subTab === 'i2i' ? getAspectRatiosForI2IModel(list[0]?.id) : getAspectRatiosForModel(list[0]?.id);
-    if (ars?.length) setAspectRatio(ars[0]);
-    const resolutions = subTab === 'i2i' ? getResolutionsForI2IModel(list[0]?.id) : getResolutionsForModel(list[0]?.id);
-    if (resolutions?.length) setResolution(resolutions[0]);
-  }, [subTab]);
-
-  // Timer for active generation
-  useEffect(() => {
-    if (!isGenerating) return;
-    const started = Date.now();
-    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
-    return () => clearInterval(timer);
-  }, [isGenerating]);
-
   const handleSubTabChange = (newTab) => {
-    setSubTab(newTab);
-    onSubTabChange?.(newTab);
+    const normalized = normalizeTab(newTab);
+    setSubTab(normalized);
+    onSubTabChange?.(normalized);
   };
 
   const addTag = (tag) => {
@@ -158,44 +151,205 @@ export default function ImageStudio({ apiKey, initialSubTab = 't2i', onSubTabCha
     }
   };
 
+  // Upload handler for source image in Edit Image
+  const handleEditSourceUpload = async (file) => {
+    if (!file || !file.type.startsWith('image/')) return;
+    setIsUploading(true);
+    try {
+      const url = await uploadFile(apiKey, file);
+      setEditSource({ url, name: file.name });
+      setMaskHistory([]);
+      setEditMask(null);
+    } catch (err) {
+      alert(`Upload failed: ${err.message}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Upload handler for reference image in Replace mode
+  const handleEditRefUpload = async (file) => {
+    if (!file || !file.type.startsWith('image/')) return;
+    setIsUploading(true);
+    try {
+      const url = await uploadFile(apiKey, file);
+      setEditReference({ url, name: file.name });
+    } catch (err) {
+      alert(`Upload failed: ${err.message}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const removeReference = (index) => {
     setReferences((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // Canvas drawing handlers for Edit Image mask brush
+  const startDrawing = (e) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+    const ctx = canvas.getContext('2d');
+    
+    // Save history for undo
+    setMaskHistory(prev => [...prev, ctx.getImageData(0, 0, canvas.width, canvas.height)]);
+
+    ctx.strokeStyle = 'rgba(255, 40, 80, 0.75)';
+    ctx.fillStyle = 'rgba(255, 40, 80, 0.75)';
+    ctx.lineWidth = brushSize;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.arc(x, y, brushSize / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    setIsDrawing(true);
+  };
+
+  const draw = (e) => {
+    if (!isDrawing) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+    const ctx = canvas.getContext('2d');
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  };
+
+  const stopDrawing = () => {
+    if (!isDrawing) return;
+    setIsDrawing(false);
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    // Export binary mask
+    const maskCanvas = document.createElement('canvas');
+    maskCanvas.width = canvas.width;
+    maskCanvas.height = canvas.height;
+    const mctx = maskCanvas.getContext('2d');
+    mctx.fillStyle = '#000000';
+    mctx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+    mctx.drawImage(canvas, 0, 0);
+    // Convert red strokes to white
+    const imgData = mctx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+    for (let i = 0; i < imgData.data.length; i += 4) {
+      if (imgData.data[i + 3] > 20 && imgData.data[i] > 100) {
+        imgData.data[i] = 255;
+        imgData.data[i + 1] = 255;
+        imgData.data[i + 2] = 255;
+        imgData.data[i + 3] = 255;
+      } else {
+        imgData.data[i] = 0;
+        imgData.data[i + 1] = 0;
+        imgData.data[i + 2] = 0;
+        imgData.data[i + 3] = 255;
+      }
+    }
+    mctx.putImageData(imgData, 0, 0);
+    maskCanvas.toBlob(async (blob) => {
+      if (blob) {
+        const file = new File([blob], 'mask.png', { type: 'image/png' });
+        const maskUrl = await uploadFile(apiKey, file);
+        setEditMask(maskUrl);
+      }
+    });
+  };
+
+  const undoMask = () => {
+    const canvas = canvasRef.current;
+    if (!canvas || !maskHistory.length) return;
+    const prev = maskHistory[maskHistory.length - 1];
+    canvas.getContext('2d').putImageData(prev, 0, 0);
+    setMaskHistory(h => h.slice(0, -1));
+  };
+
+  const clearMask = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    setMaskHistory([]);
+    setEditMask(null);
+  };
+
   const handleGenerate = async () => {
     if (isGenerating) return;
-    const textPrompt = prompt.trim();
-    if (!textPrompt) {
-      setGenerationError('Please enter a prompt.');
-      textareaRef.current?.focus();
-      return;
-    }
 
-    setIsGenerating(true);
-    setGenerationError('');
-    setHistoryVersion((v) => v + 1);
+    if (subTab === 'create') {
+      const textPrompt = prompt.trim();
+      if (!textPrompt) {
+        setGenerationError('Please enter a prompt.');
+        textareaRef.current?.focus();
+        return;
+      }
 
-    try {
-      const genParams = {
-        prompt: textPrompt,
-        model: selectedModel.id,
-        aspect_ratio: aspectRatio,
-        resolution: resolution,
-        num_inference_steps: Number.parseInt(numSteps) || 8,
-        batch_size: batchCount,
-        image_urls: references.map(r => r.url)
-      };
-
-      const res = subTab === 'i2i' 
-        ? await generateI2I(apiKey, genParams)
-        : await generateImage(apiKey, genParams);
-
+      setIsGenerating(true);
+      setGenerationError('');
       setHistoryVersion((v) => v + 1);
-    } catch (err) {
-      setGenerationError(err.message || 'Generation failed.');
-    } finally {
-      setIsGenerating(false);
+
+      try {
+        const genParams = {
+          prompt: textPrompt,
+          model: selectedModel.id,
+          aspect_ratio: aspectRatio,
+          resolution: resolution,
+          num_inference_steps: Number.parseInt(numSteps) || 6,
+          batch_size: batchCount,
+          image_urls: references.map(r => r.url)
+        };
+
+        await generateImage(apiKey, genParams);
+        setHistoryVersion((v) => v + 1);
+      } catch (err) {
+        setGenerationError(err.message || 'Generation failed.');
+      } finally {
+        setIsGenerating(false);
+        setHistoryVersion((v) => v + 1);
+      }
+    } else {
+      // Edit Image Mode
+      if (!editSource?.url) {
+        setGenerationError('Please upload an image to edit.');
+        return;
+      }
+
+      const activePrompt = editMode === 'clean_plate'
+        ? (editPrompt.trim() || 'Clean plate, remove painted element, seamlessly restore natural background textures and lighting')
+        : editPrompt.trim();
+
+      if (editMode === 'replace' && !activePrompt && !editReference?.url) {
+        setGenerationError('Please provide a replacement prompt or a reference image.');
+        return;
+      }
+
+      setIsGenerating(true);
+      setGenerationError('');
       setHistoryVersion((v) => v + 1);
+
+      try {
+        const genParams = {
+          prompt: activePrompt,
+          source: editSource.url,
+          mask: editMask,
+          reference: editReference?.url,
+          model: selectedModel.id,
+          resolution: resolution,
+          batch_size: 1
+        };
+
+        await generateI2I(apiKey, genParams);
+        setHistoryVersion((v) => v + 1);
+      } catch (err) {
+        setGenerationError(err.message || 'Edit operation failed.');
+      } finally {
+        setIsGenerating(false);
+        setHistoryVersion((v) => v + 1);
+      }
     }
   };
 
@@ -209,39 +363,27 @@ export default function ImageStudio({ apiKey, initialSubTab = 't2i', onSubTabCha
     textareaRef.current?.focus();
   };
 
-  const formatTime = (secs) => `${Math.floor(secs / 60)}m ${Math.round(secs % 60)}s`;
-
-  const availableModels = subTab === 'i2i' ? i2iModels : t2iModels;
-  const filteredModels = availableModels.filter(m => 
-    m.name.toLowerCase().includes(modelSearch.toLowerCase()) || 
-    m.id.toLowerCase().includes(modelSearch.toLowerCase())
-  );
-
-  const availableArs = subTab === 'i2i' 
-    ? getAspectRatiosForI2IModel(selectedModel.id) 
-    : getAspectRatiosForModel(selectedModel.id);
-
-  const availableResolutions = subTab === 'i2i'
-    ? getResolutionsForI2IModel(selectedModel.id)
-    : getResolutionsForModel(selectedModel.id);
+  const availableArs = getAspectRatiosForModel(selectedModel.id);
+  const availableResolutions = getResolutionsForModel(selectedModel.id);
 
   return (
     <div className="h-full flex overflow-hidden bg-[var(--bg-app,rgb(9,9,11))] text-white select-none">
       {/* ──────────────────────────────────────────────────────────────────────────
-          LEFT SIDEBAR: STUDIO CONTROLS (Identical to VideoStudio)
+          LEFT SIDEBAR: STUDIO CONTROLS (Identical architecture to VideoStudio)
           ────────────────────────────────────────────────────────────────────────── */}
       <aside className="studio-sidebar flex-shrink-0 bg-[#111115] shadow-2xl flex flex-col h-full overflow-y-auto custom-scrollbar">
-        {/* Sub-tabs: Text to Image | Image to Image / Multi-Ref */}
+        {/* Top Workflow Navigation: Create Image | Edit Image */}
         <nav className="studio-workflow-tabs" aria-label="Image workflow">
           {[
-            ['t2i', 'Text to Image'],
-            ['i2i', 'Image to Image / Multi-Ref']
+            ['create', 'Create Image'],
+            ['edit', 'Edit Image']
           ].map(([id, label]) => (
             <button
               key={id}
               type="button"
               aria-pressed={subTab === id}
               onClick={() => handleSubTabChange(id)}
+              className={subTab === id ? 'active' : ''}
             >
               {label}
             </button>
@@ -273,7 +415,7 @@ export default function ImageStudio({ apiKey, initialSubTab = 't2i', onSubTabCha
                   </span>
                 </div>
                 <span className="text-[11px] text-white/70 font-semibold drop-shadow">
-                  {subTab === 'i2i' ? 'Up to 16 Reference Fusion' : 'Native 16MP · 6 Steps DiT'}
+                  {subTab === 'edit' ? 'Brush Inpaint & Face/Object Replacement' : 'Native 16MP · 6 Steps DiT'}
                 </span>
               </div>
             </div>
@@ -287,196 +429,361 @@ export default function ImageStudio({ apiKey, initialSubTab = 't2i', onSubTabCha
             </button>
           </div>
 
-          {/* Reference Slots (for Multi-Ref / Image-to-Image mode or reference conditioning) */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-white/70 uppercase tracking-wider">
-                {subTab === 'i2i' ? 'Reference Images (Up to 16)' : 'Inspiration & Style References'}
-              </span>
-              <span className="text-[10px] text-white/40 font-mono">
-                {references.length} / {selectedModel.maxImages || 16}
-              </span>
-            </div>
-
-            {/* Thumbnails grid */}
-            <div 
-              onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
-              onDragLeave={() => setIsDragOver(false)}
-              onDrop={(e) => { e.preventDefault(); setIsDragOver(false); handleFileUpload(e.dataTransfer.files); }}
-              className={`min-h-[72px] p-2 rounded-2xl bg-[#18181f] border transition-all ${
-                isDragOver ? 'border-[var(--color-accent)] bg-[var(--color-accent-subtle)]' : 'border-white/5'
-              } flex flex-wrap gap-2 items-center`}
-            >
-              {references.map((ref, idx) => (
-                <div key={ref.id || idx} className="relative group w-14 h-14 rounded-xl overflow-hidden bg-black/60 border border-white/10 shadow-md">
-                  <img src={ref.url} alt={ref.name} className="w-full h-full object-cover" />
+          {/* ──────────────────────────────────────────────────────────────────
+              WORKFLOW 1: CREATE IMAGE (Text-to-Image with References)
+              ────────────────────────────────────────────────────────────────── */}
+          {subTab === 'create' ? (
+            <>
+              {/* References Selector matching VideoStudio */}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center bg-[#18181f] p-1 rounded-xl">
                   <button
                     type="button"
-                    onClick={() => removeReference(idx)}
-                    title="Remove image"
-                    className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-red-400"
+                    className="flex-1 py-1.5 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 bg-[#282833] text-white shadow-sm"
                   >
-                    <TrashIcon className="w-4 h-4" />
+                    <LayersIcon className="w-3.5 h-3.5 text-[var(--color-accent-text)]" />
+                    <span>References</span>
+                    {references.length > 0 && (
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[var(--color-accent)] text-white font-mono">
+                        {references.length}
+                      </span>
+                    )}
                   </button>
-                  <span className="absolute bottom-0.5 left-0.5 text-[8px] font-bold bg-black/80 px-1 rounded text-white/80">
-                    #{idx + 1}
+                </div>
+
+                {/* References Dropzone (matching VideoStudio style) */}
+                <div
+                  onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                  onDragLeave={() => setIsDragOver(false)}
+                  onDrop={(e) => { e.preventDefault(); setIsDragOver(false); handleFileUpload(e.dataTransfer.files); }}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`rounded-2xl border-2 border-dashed p-6 text-center cursor-pointer transition-all ${
+                    isDragOver
+                      ? 'border-[var(--color-accent)] bg-[var(--color-accent-subtle)]'
+                      : 'border-white/10 hover:border-white/25 bg-white/[0.01]'
+                  }`}
+                >
+                  <div className="flex justify-center mb-2">
+                    <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white/70">
+                      <ImageIcon className="w-5 h-5" />
+                    </div>
+                  </div>
+                  <p className="text-xs font-bold text-white mb-0.5">Add references</p>
+                  <p className="text-[11px] text-white/45">Up to 16 images for style, character, or scene consistency</p>
+                  <p className="text-[10px] text-white/30 mt-1">Drop files here or Paste from Clipboard (Ctrl+V)</p>
+                </div>
+
+                {/* Uploaded References Thumbnails */}
+                {references.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {references.map((ref, idx) => (
+                      <div key={ref.id || idx} className="relative group w-14 h-14 rounded-xl overflow-hidden bg-black/60 border border-white/10 shadow-md">
+                        <img src={ref.url} alt={ref.name} className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => removeReference(idx)}
+                          title="Remove image"
+                          className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-red-400"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => handleFileUpload(e.target.files)}
+                />
+              </div>
+
+              {/* Prompt Section */}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="image-prompt" className="text-xs font-bold text-white/80">
+                    Prompt
+                  </label>
+                  <span className="text-[10px] text-white/40 font-mono">
+                    {prompt.length} chars
                   </span>
                 </div>
-              ))}
 
-              {references.length < (selectedModel.maxImages || 16) && (
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isUploading}
-                  className="w-14 h-14 rounded-xl border border-dashed border-white/15 hover:border-[var(--color-accent)] bg-white/[0.02] hover:bg-white/[0.06] flex flex-col items-center justify-center gap-1 text-white/40 hover:text-white transition-all cursor-pointer"
-                >
-                  <PlusIcon className="w-4 h-4" />
-                  <span className="text-[8px] font-bold uppercase">Add</span>
-                </button>
-              )}
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => handleFileUpload(e.target.files)}
-              />
-            </div>
-          </div>
-
-          {/* Prompt Section */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <label htmlFor="image-prompt" className="text-xs font-bold text-white/80">
-                Prompt
-              </label>
-              <span className="text-[10px] text-white/40 font-mono">
-                {prompt.length} chars
-              </span>
-            </div>
-
-            <textarea
-              id="image-prompt"
-              ref={textareaRef}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder={
-                subTab === 'i2i'
-                  ? 'Describe the transformation or combination across references. E.g., Combine the character from Image 1 with the dramatic dusk lighting from Image 2...'
-                  : 'Describe the image in rich detail. MiniMax H3 Image DiT natively excels with scene architecture, atmospheric lighting, and high-frequency textures...'
-              }
-              rows={4}
-              className="w-full bg-[#18181f] border border-white/5 focus:border-[var(--color-accent)] rounded-2xl p-3.5 text-xs text-white placeholder-white/30 focus:outline-none transition-all resize-none custom-scrollbar leading-relaxed"
-            />
-
-            {/* Quick Enhancer Tags */}
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {QUICK_TAGS.map((tag) => (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => addTag(tag)}
-                  className="text-[10px] font-semibold text-white/60 hover:text-white bg-white/5 hover:bg-white/10 px-2 py-1 rounded-lg transition-all"
-                >
-                  + {tag}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Parameters Grid */}
-          <div className="flex flex-col gap-2.5 pt-2">
-            {/* Model Row with Logo */}
-            <div className="flex items-center justify-between bg-[#18181f] p-2.5 rounded-xl border border-white/5">
-              <span className="text-xs font-bold text-white/60">Model</span>
-              <div className="flex items-center gap-2">
-                <img
-                  src={getModelIcon(selectedModel) || '/assets/models/minimax-color.png'}
-                  alt=""
-                  className="w-4 h-4 object-contain"
+                <textarea
+                  id="image-prompt"
+                  ref={textareaRef}
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  placeholder="Describe the image in rich detail. MiniMax H3 Image DiT natively excels with scene architecture, atmospheric lighting, and high-frequency textures..."
+                  rows={4}
+                  className="w-full bg-[#18181f] border border-white/5 focus:border-[var(--color-accent)] rounded-2xl p-3.5 text-xs text-white placeholder-white/30 focus:outline-none transition-all resize-none custom-scrollbar leading-relaxed"
                 />
-                <span className="text-xs font-black text-white flex items-center gap-1.5">
-                  <span>{selectedModel.name}</span>
-                  <span className="text-[9px] text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
-                    Active
-                  </span>
-                </span>
-              </div>
-            </div>
 
-            {/* Aspect Ratio & Resolution Grid */}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="flex flex-col gap-1 bg-[#18181f] p-2 rounded-xl border border-white/5">
-                <span className="text-[10px] font-bold text-white/50 uppercase">Aspect Ratio</span>
-                <CustomSelect
-                  value={aspectRatio}
-                  onChange={(e) => setAspectRatio(e.target.value)}
-                  options={availableArs.length ? availableArs : ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '21:9']}
-                  className="!bg-transparent !border-0 !p-0 !text-xs !font-bold"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1 bg-[#18181f] p-2 rounded-xl border border-white/5">
-                <span className="text-[10px] font-bold text-white/50 uppercase">Resolution</span>
-                <CustomSelect
-                  value={resolution}
-                  onChange={(e) => setResolution(e.target.value)}
-                  options={
-                    availableResolutions.length
-                      ? availableResolutions
-                      : [
-                          ['1024x1024 (1MP)', '1024x1024 (1MP)'],
-                          ['2048x2048 (4MP)', '2048x2048 (4MP)'],
-                          ['4096x4096 (16MP UHD)', '4096x4096 (16MP UHD)']
-                        ]
-                  }
-                  className="!bg-transparent !border-0 !p-0 !text-xs !font-bold"
-                />
-              </div>
-            </div>
-
-            {/* Sampling Steps & Batch Count */}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="flex flex-col gap-1 bg-[#18181f] p-2 rounded-xl border border-white/5">
-                <span className="text-[10px] font-bold text-white/50 uppercase">Sampling Steps</span>
-                <CustomSelect
-                  value={numSteps}
-                  onChange={(e) => setNumSteps(e.target.value)}
-                  options={[
-                    ['6', '6 Steps (Turbo)'],
-                    ['8', '8 Steps'],
-                    ['12', '12 Steps']
-                  ]}
-                  className="!bg-transparent !border-0 !p-0 !text-xs !font-bold"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1 bg-[#18181f] p-2 rounded-xl border border-white/5">
-                <span className="text-[10px] font-bold text-white/50 uppercase">Images Batch</span>
-                <div className="flex items-center gap-1 mt-0.5">
-                  {[1, 2, 4].map((count) => (
+                {/* Quick Enhancer Tags */}
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {QUICK_TAGS.map((tag) => (
                     <button
-                      key={count}
+                      key={tag}
                       type="button"
-                      onClick={() => setBatchCount(count)}
-                      className={`flex-1 py-1 rounded text-xs font-bold transition-all ${
-                        batchCount === count
-                          ? 'bg-[var(--color-accent)] text-white shadow-sm'
-                          : 'bg-white/5 text-white/60 hover:text-white'
-                      }`}
+                      onClick={() => addTag(tag)}
+                      className="text-[10px] font-semibold text-white/60 hover:text-white bg-white/5 hover:bg-white/10 px-2 py-1 rounded-lg transition-all"
                     >
-                      {count}
+                      + {tag}
                     </button>
                   ))}
                 </div>
               </div>
-            </div>
-          </div>
 
-          {/* Accent Generate Button */}
+              {/* Parameters Grid (Redundant Model row removed) */}
+              <div className="flex flex-col gap-2.5 pt-2">
+                {/* Aspect Ratio & Resolution */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="flex flex-col gap-1 bg-[#18181f] p-2 rounded-xl border border-white/5">
+                    <span className="text-[10px] font-bold text-white/50 uppercase">Aspect Ratio</span>
+                    <CustomSelect
+                      value={aspectRatio}
+                      onChange={(e) => setAspectRatio(e.target.value)}
+                      options={availableArs.length ? availableArs : ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '21:9']}
+                      className="!bg-transparent !border-0 !p-0 !text-xs !font-bold"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1 bg-[#18181f] p-2 rounded-xl border border-white/5">
+                    <span className="text-[10px] font-bold text-white/50 uppercase">Resolution</span>
+                    <CustomSelect
+                      value={resolution}
+                      onChange={(e) => setResolution(e.target.value)}
+                      options={
+                        availableResolutions.length
+                          ? availableResolutions
+                          : [
+                              ['1024x1024 (1MP)', '1024x1024 (1MP)'],
+                              ['2048x2048 (4MP)', '2048x2048 (4MP)'],
+                              ['4096x4096 (16MP UHD)', '4096x4096 (16MP UHD)']
+                            ]
+                      }
+                      className="!bg-transparent !border-0 !p-0 !text-xs !font-bold"
+                    />
+                  </div>
+                </div>
+
+                {/* Sampling Steps & Batch Count */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="flex flex-col gap-1 bg-[#18181f] p-2 rounded-xl border border-white/5">
+                    <span className="text-[10px] font-bold text-white/50 uppercase">Sampling Steps</span>
+                    <CustomSelect
+                      value={numSteps}
+                      onChange={(e) => setNumSteps(e.target.value)}
+                      options={[
+                        ['6', '6 Steps (Turbo)'],
+                        ['8', '8 Steps'],
+                        ['12', '12 Steps']
+                      ]}
+                      className="!bg-transparent !border-0 !p-0 !text-xs !font-bold"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1 bg-[#18181f] p-2 rounded-xl border border-white/5">
+                    <span className="text-[10px] font-bold text-white/50 uppercase">Images Batch</span>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      {[1, 2, 4].map((count) => (
+                        <button
+                          key={count}
+                          type="button"
+                          onClick={() => setBatchCount(count)}
+                          className={`flex-1 py-1 rounded text-xs font-bold transition-all ${
+                            batchCount === count
+                              ? 'bg-[var(--color-accent)] text-white shadow-sm'
+                              : 'bg-white/5 text-white/60 hover:text-white'
+                          }`}
+                        >
+                          {count}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            /* ──────────────────────────────────────────────────────────────────
+                WORKFLOW 2: EDIT IMAGE (Clean Plate / Remove & Replace Object/Face)
+                ────────────────────────────────────────────────────────────────── */
+            <div className="flex flex-col gap-4">
+              {/* Edit Sub-Mode Selector */}
+              <div className="flex items-center bg-[#18181f] p-1 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setEditMode('clean_plate')}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                    editMode === 'clean_plate'
+                      ? 'bg-[#282833] text-white shadow-sm'
+                      : 'text-white/50 hover:text-white'
+                  }`}
+                >
+                  Clean Plate / Remove
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditMode('replace')}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                    editMode === 'replace'
+                      ? 'bg-[#282833] text-white shadow-sm'
+                      : 'text-white/50 hover:text-white'
+                  }`}
+                >
+                  Replace Object / Face
+                </button>
+              </div>
+
+              {/* Base Image Upload / Brush Canvas */}
+              {!editSource ? (
+                <div
+                  onClick={() => editSourceInputRef.current?.click()}
+                  className="rounded-2xl border-2 border-dashed border-white/10 hover:border-white/25 p-7 text-center cursor-pointer bg-white/[0.01] transition-all"
+                >
+                  <div className="flex justify-center mb-2">
+                    <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white/70">
+                      <ImageIcon className="w-5 h-5" />
+                    </div>
+                  </div>
+                  <p className="text-xs font-bold text-white mb-0.5">Upload base image</p>
+                  <p className="text-[11px] text-white/45">Select an image to paint over and edit</p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between text-xs font-semibold text-white/80">
+                    <span>Paint Mask Area</span>
+                    <div className="flex items-center gap-2">
+                      <button 
+                        type="button" 
+                        onClick={undoMask} 
+                        title="Undo stroke"
+                        className="p-1 rounded bg-white/5 hover:bg-white/10 text-white/70 hover:text-white"
+                      >
+                        <UndoIcon className="w-3.5 h-3.5"/>
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={clearMask} 
+                        className="text-[10px] text-red-400 hover:underline"
+                      >
+                        Clear
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={() => setEditSource(null)} 
+                        className="text-[10px] text-white/40 hover:text-white"
+                      >
+                        Change Image
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Interactive Mask Brush Canvas Overlay */}
+                  <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-black/60 border border-white/10 flex items-center justify-center">
+                    <img 
+                      src={editSource.url} 
+                      alt="Source" 
+                      className="absolute inset-0 w-full h-full object-contain pointer-events-none select-none"
+                    />
+                    <canvas
+                      ref={canvasRef}
+                      width={512}
+                      height={512}
+                      onMouseDown={startDrawing}
+                      onMouseMove={draw}
+                      onMouseUp={stopDrawing}
+                      onMouseLeave={stopDrawing}
+                      className="absolute inset-0 w-full h-full object-contain cursor-crosshair z-10"
+                    />
+                  </div>
+
+                  {/* Brush Size Slider */}
+                  <div className="flex items-center justify-between bg-[#18181f] p-2 rounded-xl text-xs">
+                    <span className="text-[10px] font-bold text-white/50 uppercase">Brush Size: {brushSize}px</span>
+                    <input 
+                      type="range" 
+                      min="12" 
+                      max="80" 
+                      value={brushSize} 
+                      onChange={(e) => setBrushSize(Number(e.target.value))}
+                      className="w-32 accent-[var(--color-accent)]"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <input
+                ref={editSourceInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => e.target.files?.[0] && handleEditSourceUpload(e.target.files[0])}
+              />
+
+              {/* Mode-Specific Controls */}
+              {editMode === 'replace' ? (
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-white/80 block mb-1">
+                      Replacement Prompt
+                    </label>
+                    <textarea
+                      value={editPrompt}
+                      onChange={(e) => setEditPrompt(e.target.value)}
+                      placeholder="Describe what to generate in the painted area (e.g. 'A sleek carbon-fiber spoiler', 'A smiling cyborg face', etc.)..."
+                      rows={3}
+                      className="w-full bg-[#18181f] border border-white/5 focus:border-[var(--color-accent)] rounded-2xl p-3 text-xs text-white placeholder-white/30 focus:outline-none transition-all resize-none"
+                    />
+                  </div>
+
+                  {/* Optional Reference for Face / Object Transfer */}
+                  <div>
+                    <span className="text-xs font-bold text-white/80 block mb-1">
+                      Identity / Style Reference (Optional)
+                    </span>
+                    {!editReference ? (
+                      <div
+                        onClick={() => editRefInputRef.current?.click()}
+                        className="rounded-xl border border-dashed border-white/10 p-3 text-center cursor-pointer hover:border-white/20 text-xs text-white/40"
+                      >
+                        + Add reference image for face/texture transfer
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 bg-[#18181f] p-2 rounded-xl">
+                        <img src={editReference.url} alt="Reference" className="w-10 h-10 rounded-lg object-cover" />
+                        <span className="text-xs text-white/80 flex-1 truncate">{editReference.name}</span>
+                        <button type="button" onClick={() => setEditReference(null)} className="text-red-400 p-1">
+                          <TrashIcon className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                    <input
+                      ref={editRefInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => e.target.files?.[0] && handleEditRefUpload(e.target.files[0])}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 rounded-2xl bg-white/[0.02] border border-white/5 text-xs text-white/60 leading-relaxed">
+                  <p className="font-semibold text-white/80 mb-1">Clean Plate Inpainting</p>
+                  <p className="text-[11px] text-white/45">
+                    Paint over unwanted elements, watermarks, or objects. OpenHiggs will reconstruct and blend the background seamlessly.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Accent Action Button (Matching VideoStudio) */}
           <div className="mt-auto pt-3">
             <button
               type="button"
@@ -487,12 +794,16 @@ export default function ImageStudio({ apiKey, initialSubTab = 't2i', onSubTabCha
               {isGenerating ? (
                 <>
                   <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                  <span>Generating Image…</span>
+                  <span>{subTab === 'edit' ? 'Applying Edit…' : 'Generating Image…'}</span>
                 </>
               ) : (
                 <>
                   <SparkleIcon className="w-4 h-4 text-white" />
-                  <span>Generate Image</span>
+                  <span>
+                    {subTab === 'edit' 
+                      ? (editMode === 'clean_plate' ? 'Clean Plate ✦ Local' : 'Replace Object ✦ Local') 
+                      : 'Generate Image ✦ Local'}
+                  </span>
                 </>
               )}
             </button>
@@ -507,7 +818,7 @@ export default function ImageStudio({ apiKey, initialSubTab = 't2i', onSubTabCha
       </aside>
 
       {/* ──────────────────────────────────────────────────────────────────────────
-          MAIN WORKSPACE: GenerationHistory (Matching VideoStudio 100%)
+          MAIN WORKSPACE: GenerationHistory (Default Masonry, Hover Icons, Popup Modal)
           ────────────────────────────────────────────────────────────────────────── */}
       <GenerationHistory
         mediaType="image"
@@ -520,102 +831,59 @@ export default function ImageStudio({ apiKey, initialSubTab = 't2i', onSubTabCha
           MODEL SELECTION MODAL
           ────────────────────────────────────────────────────────────────────────── */}
       {showModelModal && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-[#111115] rounded-3xl max-w-xl w-full p-6 shadow-2xl flex flex-col gap-4 animate-scale-in border border-white/10">
-            {/* Header with Search and Close */}
-            <div className="flex items-center justify-between pb-1">
-              <div className="flex items-center gap-2">
-                <img src="/assets/models/minimax-color.png" alt="" className="w-5 h-5 object-contain" />
-                <h3 className="text-base font-black text-white uppercase tracking-wide">
-                  Select Image Model
-                </h3>
-              </div>
+        <div 
+          role="dialog" 
+          aria-modal="true" 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+        >
+          <div className="w-full max-w-lg bg-[#14141a] rounded-3xl p-6 shadow-2xl border border-white/10 flex flex-col gap-4 animate-scale-in">
+            <div className="flex items-center justify-between pb-2 border-b border-white/5">
+              <h2 className="text-sm font-black text-white uppercase tracking-wider">Select Diffusion Model</h2>
               <button
                 type="button"
                 onClick={() => setShowModelModal(false)}
-                className="text-white/40 hover:text-white p-1"
+                className="text-white/40 hover:text-white p-1 rounded-lg"
               >
                 <CloseIcon className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Modal Cover Artwork Banner */}
-            <div
-              className="relative rounded-2xl h-24 p-3.5 flex flex-col justify-end overflow-hidden border border-white/10 shadow-inner"
-              style={{
-                backgroundImage: `linear-gradient(to top, rgba(17, 17, 21, 0.95), rgba(17, 17, 21, 0.25)), url('/assets/models/minimax-h3-image.jpg')`,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-              }}
-            >
-              <span className="text-[10px] font-black uppercase text-[var(--color-accent-text)] tracking-wider">
-                MiniMax H3 Image (33.1B DiT)
-              </span>
-              <span className="text-xs text-white/90 font-medium">
-                Native 16MP ultra-high-resolution image generation & multi-image editing
-              </span>
-            </div>
+            <input
+              type="text"
+              placeholder="Search models..."
+              value={modelSearch}
+              onChange={(e) => setModelSearch(e.target.value)}
+              className="w-full bg-[#18181f] border border-white/5 focus:border-[var(--color-accent)] rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 outline-none"
+            />
 
-            {/* Search Input */}
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Search models..."
-                value={modelSearch}
-                onChange={(e) => setModelSearch(e.target.value)}
-                className="w-full bg-[#18181f] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[var(--color-accent)]"
-              />
-            </div>
-
-            {/* Models List */}
-            <div className="grid grid-cols-1 gap-2.5 max-h-80 overflow-y-auto custom-scrollbar pr-1">
-              {filteredModels.map((m) => {
-                const icon = getModelIcon(m);
-                const isSelected = selectedModel.id === m.id;
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedModel(m);
-                      setShowModelModal(false);
-                    }}
-                    className={`p-3 rounded-2xl text-left flex items-center justify-between transition-all border ${
-                      isSelected
-                        ? 'bg-[var(--color-accent-subtle)] border-[var(--color-accent)] text-white shadow-md'
-                        : 'bg-[#18181f] hover:bg-[#20202a] border-white/5 text-white/80'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden border border-white/10 bg-[#14141a] p-1.5 flex-shrink-0">
-                        {icon ? (
-                          <img src={icon} alt="" className="w-full h-full object-contain" />
-                        ) : (
-                          <span className="font-black text-xs text-white/80 uppercase">
-                            {m.name.charAt(0)}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex flex-col min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-black text-white truncate">{m.name}</span>
-                          {m.badge && (
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[var(--color-accent)] text-white flex-shrink-0">
-                              {m.badge}
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-[11px] text-white/50 truncate max-w-sm">
-                          {m.description || 'OpenHiggs creative model'}
-                        </span>
-                      </div>
-                    </div>
-                    {isSelected && (
-                      <span className="w-2 h-2 rounded-full bg-[var(--color-accent)] ml-2 flex-shrink-0 shadow-[0_0_8px_var(--color-accent)]" />
-                    )}
-                  </button>
-                );
-              })}
+            <div className="flex flex-col gap-2 max-h-80 overflow-y-auto custom-scrollbar">
+              {t2iModels.filter(m => m.name.toLowerCase().includes(modelSearch.toLowerCase()) || m.id.toLowerCase().includes(modelSearch.toLowerCase())).map((model) => (
+                <button
+                  key={model.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedModel(model);
+                    setShowModelModal(false);
+                  }}
+                  className={`flex items-center gap-3 p-3 rounded-2xl border text-left transition-all ${
+                    selectedModel.id === model.id
+                      ? 'border-[var(--color-accent)] bg-[var(--color-accent-subtle)]'
+                      : 'border-white/5 hover:border-white/15 bg-white/[0.01]'
+                  }`}
+                >
+                  <div className="w-10 h-10 rounded-xl bg-black/50 p-1 flex items-center justify-center border border-white/10">
+                    <img
+                      src={getModelIcon(model) || '/assets/models/minimax-color.png'}
+                      alt=""
+                      className="w-6 h-6 object-contain"
+                    />
+                  </div>
+                  <div className="flex flex-col flex-1 min-w-0">
+                    <span className="text-xs font-bold text-white truncate">{model.name}</span>
+                    <span className="text-[10px] text-white/50 truncate">{model.description}</span>
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
         </div>

@@ -45,13 +45,27 @@ export async function listGenerations({ includeDeleted = false } = {}) {
     }
   }));
   const validRecords = records.filter(Boolean);
-  const known = new Set(validRecords.map(r => r.fileName));
+  const known = new Set();
+  for (const r of validRecords) {
+    if (r.fileName) known.add(r.fileName);
+    if (r.originalFileName) known.add(r.originalFileName);
+    if (Array.isArray(r.images)) {
+      for (const img of r.images) {
+        if (img?.fileName) known.add(img.fileName);
+      }
+    }
+    const baseTag = (r.fileName || '').replace(/(_\d+|\(\d+\))\.[^.]+$/, '');
+    if (baseTag && baseTag.length > 8) known.add(baseTag);
+  }
+
   const outputs = path.resolve(getInstallRoot(), 'data', 'generations');
   await fs.mkdir(outputs, { recursive: true });
   try {
     const outFiles = await fs.readdir(outputs);
     for (const name of outFiles) {
       if (known.has(name)) continue;
+      const baseTag = name.replace(/(_\d+|\(\d+\))\.[^.]+$/, '');
+      if (known.has(baseTag)) continue;
       const stat = await fs.stat(path.join(outputs, name));
       if (/\.mp4$/i.test(name)) {
         validRecords.push({

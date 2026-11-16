@@ -154,6 +154,43 @@ export async function generateImage({base,wanRoot,wanOutputRoot,uploadsDir,outpu
 
   const settings=JSON.parse(await fs.readFile(path.join(wanRoot,'settings',settingsFile),'utf8'));
   const files=[];
+
+  // Packaging references for multi-ref / conditioning
+  const refs = [];
+  const referenceUrls = body.image_urls || (body.references ? body.references.map(r => r.url) : []);
+  for (const refUrl of referenceUrls) {
+    const name = decodeURIComponent((refUrl || '').split('/').pop());
+    if (name) {
+      const entry = `media/${files.length}${path.extname(name)}`;
+      try {
+        files.push([entry, await fs.readFile(path.join(uploadsDir, name))]);
+        refs.push(entry);
+      } catch {}
+    }
+  }
+
+  // Packaging inpaint source and mask if provided
+  if (body.source) {
+    const name = decodeURIComponent(body.source.split('/').pop());
+    if (name) {
+      const entry = `media/source${path.extname(name)}`;
+      try {
+        files.push([entry, await fs.readFile(path.join(uploadsDir, name))]);
+        settings.image_guide = entry;
+      } catch {}
+    }
+  }
+  if (body.mask) {
+    const name = decodeURIComponent(body.mask.split('/').pop());
+    if (name) {
+      const entry = `media/mask${path.extname(name)}`;
+      try {
+        files.push([entry, await fs.readFile(path.join(uploadsDir, name))]);
+        settings.image_mask = entry;
+      } catch {}
+    }
+  }
+
   let targetRes = body.resolution || '1024x1024';
   if (String(targetRes).includes('4096')) {
     targetRes = '2048x2048';
@@ -176,7 +213,9 @@ export async function generateImage({base,wanRoot,wanOutputRoot,uploadsDir,outpu
     repeat_generation: 1,
     seed: Number(body.seed) >= 0 ? Number(body.seed) : -1,
     output_filename: tag,
-    client_id: session
+    client_id: session,
+    image_refs: refs.length ? refs : null,
+    video_prompt_type: refs.length ? 'I' : ''
   });
 
   const queueTasks = [];
