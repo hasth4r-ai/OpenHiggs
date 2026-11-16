@@ -1,6 +1,65 @@
 // Auto-generated from models_dump.json
 export const t2iModels = [
   {
+    "id": "minimax-h3-image",
+    "name": "MiniMax H3 Image",
+    "family": "minimax",
+    "endpoint": "minimax-h3-image",
+    "featured": true,
+    "icon": "/assets/models/minimax-color.png",
+    "cover": "/assets/models/minimax-h3-image.jpg",
+    "badge": "16MP Native DiT",
+    "description": "MiniMax-H3-Image (33.1B DiT) · Native 16MP ultra-high-resolution image generation & multi-image editing with 6-step turbo sampling.",
+    "inputs": {
+      "prompt": {
+        "examples": [
+          "A cinematic atmospheric portrait of an artisan clockmaker in a Victorian workshop bathed in golden dusk light, photorealistic 8k, bokeh, ultra-detailed textures."
+        ],
+        "description": "Text prompt describing the desired image scene, style, lighting, and composition.",
+        "type": "string",
+        "title": "Prompt",
+        "name": "prompt"
+      },
+      "aspect_ratio": {
+        "enum": [
+          "1:1",
+          "16:9",
+          "9:16",
+          "4:3",
+          "3:4",
+          "3:2",
+          "2:3",
+          "21:9"
+        ],
+        "title": "Aspect Ratio",
+        "name": "aspect_ratio",
+        "type": "string",
+        "description": "Aspect ratio of the generated image.",
+        "default": "1:1"
+      },
+      "resolution": {
+        "enum": [
+          "1024x1024 (1MP)",
+          "2048x2048 (4MP)",
+          "4096x4096 (16MP UHD)"
+        ],
+        "title": "Resolution",
+        "name": "resolution",
+        "type": "string",
+        "description": "High-fidelity generation resolution.",
+        "default": "2048x2048 (4MP)"
+      },
+      "num_inference_steps": {
+        "title": "Inference Steps",
+        "name": "num_inference_steps",
+        "type": "int",
+        "default": 6,
+        "minValue": 4,
+        "maxValue": 20
+      }
+    }
+  },
+  {
     "id": "nano-banana",
     "name": "Nano Banana",
     "endpoint": "nano-banana",
@@ -2534,6 +2593,60 @@ export const getResolutionsForVideoModel = (modelId) => {
 };
 // Auto-generated from schema_data.json — Image to Image models
 export const i2iModels = [
+  {
+    "id": "minimax-h3-image-edit",
+    "name": "MiniMax H3 Image (Multi-Ref)",
+    "family": "minimax",
+    "endpoint": "minimax-h3-image-edit",
+    "featured": true,
+    "icon": "/assets/models/minimax-color.png",
+    "cover": "/assets/models/minimax-h3-image.jpg",
+    "badge": "16-Ref Fusion",
+    "description": "MiniMax H3 Image multi-reference editing · Native support for up to 16 reference images in a single pass.",
+    "imageField": "image_urls",
+    "hasPrompt": true,
+    "maxImages": 16,
+    "inputs": {
+      "prompt": {
+        "examples": [
+          "Combine the subject from Image 1 with the cinematic background lighting from Image 2, photorealistic 8k."
+        ],
+        "description": "Describe the desired transformation or combination across references.",
+        "type": "string",
+        "title": "Prompt",
+        "name": "prompt"
+      },
+      "aspect_ratio": {
+        "enum": [
+          "1:1",
+          "16:9",
+          "9:16",
+          "4:3",
+          "3:4",
+          "3:2",
+          "2:3",
+          "21:9"
+        ],
+        "title": "Aspect Ratio",
+        "name": "aspect_ratio",
+        "type": "string",
+        "description": "Aspect ratio of the generated image.",
+        "default": "1:1"
+      },
+      "resolution": {
+        "enum": [
+          "1024x1024 (1MP)",
+          "2048x2048 (4MP)",
+          "4096x4096 (16MP UHD)"
+        ],
+        "title": "Resolution",
+        "name": "resolution",
+        "type": "string",
+        "description": "Output generation resolution.",
+        "default": "2048x2048 (4MP)"
+      }
+    }
+  },
   {
     "id": "ai-image-upscaler",
     "name": "AI Image Upscaler",

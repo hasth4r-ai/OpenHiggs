@@ -488,6 +488,20 @@ function UploadButton({ apiKey, maxImages, onSelect, onClear }) {
 
 // ─── ModelDropdown ────────────────────────────────────────────────────────────
 
+function getModelIcon(model) {
+  if (model.icon) return model.icon;
+  const id = (model.id || "").toLowerCase();
+  const name = (model.name || "").toLowerCase();
+  const family = (model.family || "").toLowerCase();
+  if (id.includes('minimax') || name.includes('minimax') || family === 'minimax') {
+    return '/assets/models/minimax-color.png';
+  }
+  if (id.includes('wan') || name.includes('wan') || family === 'wan') {
+    return '/assets/models/wan-logo.png';
+  }
+  return null;
+}
+
 function ModelDropdown({ models, selectedModel, onSelect, onClose }) {
   const [search, setSearch] = useState("");
 
@@ -527,41 +541,52 @@ function ModelDropdown({ models, selectedModel, onSelect, onClose }) {
         Available models
       </div>
       <div className="flex flex-col gap-1.5 overflow-y-auto custom-scrollbar pr-1 pb-2">
-        {filtered.map((m) => (
-          <div
-            key={m.id}
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelect(m);
-              onClose();
-            }}
-            className={`flex items-center justify-between p-3.5 hover:bg-white/5 rounded-2xl cursor-pointer transition-all border border-transparent hover:border-white/5 ${
-              selectedModel === m.id ? "bg-white/5 border-white/5" : ""
-            }`}
-          >
-            <div className="flex items-center gap-3.5">
-              <div
-                className={`w-10 h-10 ${
-                  m.family === "kontext"
-                    ? "bg-[var(--color-accent-subtle)] text-[var(--color-accent-text)]"
-                    : m.family === "effects"
-                    ? "bg-purple-500/10 text-purple-400"
-                    : "bg-primary/10 text-primary"
-                } border border-white/5 rounded-xl flex items-center justify-center font-black text-sm shadow-inner uppercase`}
-              >
-                {m.name.charAt(0)}
+        {filtered.map((m) => {
+          const icon = getModelIcon(m);
+          return (
+            <div
+              key={m.id}
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelect(m);
+                onClose();
+              }}
+              className={`flex items-center justify-between p-3 hover:bg-white/5 rounded-2xl cursor-pointer transition-all border border-transparent hover:border-white/5 ${
+                selectedModel === m.id ? "bg-white/5 border-white/10" : ""
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden border border-white/10 bg-[#16161e] shadow-inner p-1.5 shrink-0"
+                >
+                  {icon ? (
+                    <img src={icon} alt="" className="w-full h-full object-contain" />
+                  ) : (
+                    <span className="font-black text-xs text-white/80 uppercase">{m.name.charAt(0)}</span>
+                  )}
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-white tracking-tight">{m.name}</span>
+                    {m.badge && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[var(--color-accent)] text-white leading-none">
+                        {m.badge}
+                      </span>
+                    )}
+                  </div>
+                  {m.description && (
+                    <span className="text-[10px] text-white/50 truncate max-w-[210px]">{m.description}</span>
+                  )}
+                </div>
               </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-bold text-white tracking-tight">{m.name}</span>
-              </div>
+              {selectedModel === m.id && (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="4">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              )}
             </div>
-            {selectedModel === m.id && (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="4">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -949,46 +974,36 @@ export default function ImageStudio({ apiKey, onGenerationComplete, historyItems
       {/* ── PROMPT VIEW ─────────────────────────────────────────────────── */}
       {!showCanvas && (
         <>
-          {/* Hero */}
-          <div className="flex flex-col items-center mb-10 md:mb-20 animate-fade-in-up transition-all duration-700">
-            <div className="mb-10 relative group">
-              <div className="absolute inset-0 bg-primary/20 blur-[100px] rounded-full opacity-40 group-hover:opacity-70 transition-opacity duration-1000" />
-              <div className="relative w-24 h-24 md:w-32 md:h-32 bg-teal-900/40 rounded-3xl flex items-center justify-center border border-white/5 overflow-hidden">
-                <svg
-                  width="80"
-                  height="80"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1"
-                  className="text-primary opacity-20 absolute -right-4 -bottom-4"
-                >
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                </svg>
-                <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center border border-primary/20 shadow-glow relative z-10">
-                  <svg
-                    width="32"
-                    height="32"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    className="text-primary"
-                  >
-                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                    <circle cx="8.5" cy="8.5" r="1.5" />
-                    <polyline points="21 15 16 10 5 21" />
-                  </svg>
+          {/* Hero with MiniMax H3 Image Banner Card */}
+          <div className="flex flex-col items-center mb-6 md:mb-8 animate-fade-in-up transition-all duration-700 w-full max-w-4xl">
+            <div 
+              className="w-full relative rounded-3xl overflow-hidden border border-white/10 shadow-2xl p-6 md:p-8 flex flex-col justify-end min-h-[170px] md:min-h-[210px] group transition-all"
+              style={{
+                backgroundImage: `linear-gradient(to top, rgba(9, 9, 13, 0.95) 15%, rgba(9, 9, 13, 0.65) 60%, rgba(9, 9, 13, 0.3) 100%), url('/assets/models/minimax-h3-image.jpg')`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }}
+            >
+              <div className="flex items-center gap-2 mb-2 flex-wrap z-10">
+                <div className="w-7 h-7 rounded-lg bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center p-1">
+                  <img src="/assets/models/minimax-color.png" alt="MiniMax" className="w-full h-full object-contain" />
                 </div>
-                <div className="absolute top-4 right-4 text-primary animate-pulse">✨</div>
+                <span className="text-[11px] font-black tracking-widest text-[var(--color-accent-text)] uppercase bg-[var(--color-accent-subtle)] px-2.5 py-1 rounded-full border border-white/10">
+                  MiniMax H3 Image · Open Weights
+                </span>
+                <span className="text-[10px] font-bold text-white/80 bg-black/50 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/10">
+                  {imageMode ? 'Up to 16 Reference Fusion' : '16MP Direct Ultra-HD · 6 Steps'}
+                </span>
               </div>
+              <h1 className="text-xl sm:text-2xl md:text-4xl font-black text-white tracking-tight uppercase mb-1 drop-shadow-md z-10">
+                {imageMode ? 'Multi-Image Fusion & Edit' : 'Text To Image Synthesis'}
+              </h1>
+              <p className="text-white/75 text-xs md:text-sm font-medium tracking-wide drop-shadow max-w-2xl z-10">
+                {imageMode 
+                  ? 'Reference up to 16 photos, sketches, or character turnarounds for cohesive multi-shot composition.' 
+                  : 'Distilled 33.1B parameter Diffusion Transformer generating native 16-megapixel ultra-high-definition images.'}
+              </p>
             </div>
-            <h1 className="text-2xl sm:text-4xl md:text-7xl font-black text-white tracking-widest uppercase mb-4 selection:bg-primary selection:text-black text-center px-4">
-              Image Studio
-            </h1>
-            <p className="text-secondary text-sm font-medium tracking-wide opacity-60">
-              Transform images with AI — upscale, stylize, animate and more
-            </p>
           </div>
 
           {/* Prompt bar */}
@@ -1028,10 +1043,18 @@ export default function ImageStudio({ apiKey, onGenerationComplete, historyItems
                         e.stopPropagation();
                         setDropdownOpen((o) => (o === "model" ? null : "model"));
                       }}
-                      className="flex items-center gap-1.5 md:gap-2.5 px-3 md:px-4 py-2 md:py-2.5 bg-white/5 hover:bg-white/10 rounded-xl md:rounded-2xl transition-all border border-white/5 group whitespace-nowrap"
+                      className="flex items-center gap-2 px-3 md:px-4 py-2 md:py-2.5 bg-white/5 hover:bg-white/10 rounded-xl md:rounded-2xl transition-all border border-white/5 group whitespace-nowrap"
                     >
-                      <div className="w-5 h-5 bg-primary rounded-md flex items-center justify-center shadow-lg shadow-primary/20">
-                        <span className="text-[10px] font-black text-black">G</span>
+                      <div className="w-5 h-5 rounded-md flex items-center justify-center overflow-hidden shrink-0">
+                        {(selectedModelId.toLowerCase().includes('minimax')) ? (
+                          <img src="/assets/models/minimax-color.png" alt="MiniMax" className="w-4 h-4 object-contain" />
+                        ) : (selectedModelId.toLowerCase().includes('wan')) ? (
+                          <img src="/assets/models/wan-logo.png" alt="Wan" className="w-4 h-4 object-contain" />
+                        ) : (
+                          <div className="w-full h-full bg-primary/20 text-primary border border-primary/30 rounded flex items-center justify-center font-bold text-[10px]">
+                            {selectedModelName.charAt(0)}
+                          </div>
+                        )}
                       </div>
                       <span className="text-xs font-bold text-white group-hover:text-primary transition-colors">
                         {selectedModelName}
@@ -1043,7 +1066,7 @@ export default function ImageStudio({ apiKey, onGenerationComplete, historyItems
                         fill="none"
                         stroke="currentColor"
                         strokeWidth="4"
-                        className="opacity-20 group-hover:opacity-100 transition-opacity"
+                        className="opacity-20 group-hover:opacity-100 transition-opacity ml-0.5"
                       >
                         <path d="M6 9l6 6 6-6" />
                       </svg>

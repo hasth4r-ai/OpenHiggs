@@ -16,15 +16,15 @@ export default function CustomSelect({
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef(null);
 
-  // Normalize options to [{ value, label }]
+  // Normalize options to [{ value, label, icon }]
   const normalizedOptions = options.map((opt) => {
     if (typeof opt === 'string' || typeof opt === 'number') {
       return { value: String(opt), label: String(opt) };
     }
     if (Array.isArray(opt)) {
-      return { value: String(opt[0]), label: String(opt[1]) };
+      return { value: String(opt[0]), label: String(opt[1]), icon: opt[2] };
     }
-    return { value: String(opt.value), label: String(opt.label ?? opt.value) };
+    return { value: String(opt.value), label: String(opt.label ?? opt.value), icon: opt.icon };
   });
 
   const selectedOption = normalizedOptions.find((opt) => String(opt.value) === String(value)) || {
@@ -73,9 +73,18 @@ export default function CustomSelect({
         aria-expanded={isOpen}
         className={`w-full flex items-center justify-between bg-[#18181f] border border-white/5 text-white/90 font-medium hover:border-white/10 hover:text-white transition-all outline-none focus:ring-1 focus:ring-[var(--color-accent)] disabled:opacity-40 disabled:cursor-not-allowed ${sizeClasses} ${className}`}
       >
-        <span className="truncate">{selectedOption.label}</span>
+        <span className="truncate flex items-center gap-1.5">
+          {selectedOption.icon && (
+            typeof selectedOption.icon === 'string' ? (
+              <img src={selectedOption.icon} alt="" className="w-4 h-4 object-contain rounded flex-shrink-0" />
+            ) : (
+              selectedOption.icon
+            )
+          )}
+          <span className="truncate">{selectedOption.label}</span>
+        </span>
         <ChevronDownIcon
-          className={`w-3.5 h-3.5 text-white/40 transition-transform duration-200 flex-shrink-0 ${
+          className={`w-3.5 h-3.5 text-white/40 transition-transform duration-200 flex-shrink-0 ml-1.5 ${
             isOpen ? 'rotate-180 text-[var(--color-accent-text)]' : ''
           }`}
         />
@@ -103,7 +112,16 @@ export default function CustomSelect({
                     : 'text-white/70 hover:bg-white/10 hover:text-white'
                 }`}
               >
-                <span className="truncate">{opt.label}</span>
+                <span className="truncate flex items-center gap-2">
+                  {opt.icon && (
+                    typeof opt.icon === 'string' ? (
+                      <img src={opt.icon} alt="" className="w-4 h-4 object-contain rounded flex-shrink-0" />
+                    ) : (
+                      opt.icon
+                    )
+                  )}
+                  <span className="truncate">{opt.label}</span>
+                </span>
                 {isSelected && (
                   <span className="w-1.5 h-1.5 rounded-full bg-white ml-2 flex-shrink-0" />
                 )}

@@ -1,6 +1,6 @@
 // Local hosting adapter: routes uploads to local storage C:\openhiggs\data\uploads\
-// and preserves offline safety for model generation until local models are connected.
-export const LOCAL_ENGINE_CONNECTED = false;
+// and preserves offline safety for model generation.
+export const LOCAL_ENGINE_CONNECTED = true;
 export const LOCAL_UPLOADS_ENABLED = true;
 
 const localUploadMap = new Map();
@@ -60,12 +60,36 @@ export function uploadFile(apiKey, file, onProgress) {
   });
 }
 
-async function engineNotConnected() {
-  throw new Error('Local models are not connected yet. Generation is disabled; no cloud API request was sent.');
+export async function generateImage(apiKey, params) {
+  const res = await fetch('/api/image/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params)
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Image generation failed with status ${res.status}`);
+  }
+  return await res.json();
 }
 
-export const generateImage = engineNotConnected;
-export const generateI2I = engineNotConnected;
+export async function generateI2I(apiKey, params) {
+  const res = await fetch('/api/image/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...params, mode: 'i2i' })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Image editing failed with status ${res.status}`);
+  }
+  return await res.json();
+}
+
+async function engineNotConnected() {
+  throw new Error('Local video/audio models are being routed through the dedicated video and audio tabs.');
+}
+
 export const generateVideo = engineNotConnected;
 export const generateI2V = engineNotConnected;
 export const processLipSync = engineNotConnected;

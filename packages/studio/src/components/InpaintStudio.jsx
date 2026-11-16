@@ -132,16 +132,16 @@ export default function InpaintStudio({onNavigate,initialDraft,blocked=false}) {
         </div>
 
         {/* Model Selector */}
-        <div className="flex items-center justify-between bg-[#18181f] p-2.5 rounded-xl">
+        <div className="flex items-center justify-between bg-[#18181f] p-2.5 rounded-xl border border-white/5">
           <span className="text-xs font-bold text-white/60">Model</span>
-          <div className="w-56">
+          <div className="w-64">
             <CustomSelect
               value={form.model || 'wan21'}
               disabled={generating}
               onChange={e => update('model', e.target.value)}
               options={[
-                ['wan21', 'Wan 2.1 (Vace 14B FusioniX)'],
-                ['minimax_h3', 'MiniMax H3']
+                ['wan21', 'Wan 2.1 (Vace 14B FusioniX)', '/assets/models/wan-logo.png'],
+                ['minimax_h3', 'MiniMax H3', '/assets/models/minimax-color.png']
               ]}
               size="sm"
               className="!bg-transparent !border-0 !p-0 !text-xs !font-bold text-right"

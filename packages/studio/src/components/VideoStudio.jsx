@@ -469,16 +469,28 @@ export default function VideoStudio({ apiKey, initialSubTab, onSubTabChange }) {
         <div className="p-4 flex flex-col gap-4 flex-1">
 
           {/* Model / Preset Banner */}
-          <div className="relative rounded-2xl bg-[#18181f] p-3.5 flex items-center justify-between group overflow-hidden transition-all duration-200 hover:bg-[#1f1f28]">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-[#24242d] flex items-center justify-center overflow-hidden shadow-inner">
-                {activePreset.icon}
+          <div 
+            className="relative rounded-2xl p-3.5 flex items-center justify-between group overflow-hidden transition-all duration-300 shadow-xl border border-white/10"
+            style={{
+              backgroundImage: `linear-gradient(to right, rgba(17, 17, 24, 0.95) 25%, rgba(17, 17, 24, 0.78) 65%, rgba(17, 17, 24, 0.45) 100%), url('/assets/models/minimax-h3.png')`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }}
+          >
+            <div className="flex items-center gap-3 z-10">
+              <div className="w-12 h-12 rounded-xl bg-black/50 backdrop-blur-md border border-white/15 flex items-center justify-center overflow-hidden shadow-inner p-1">
+                <img src="/assets/models/minimax-color.png" alt="MiniMax" className="w-8 h-8 object-contain" />
               </div>
               <div className="flex flex-col">
-                <span className="text-xs font-black text-[var(--color-accent-text)] tracking-wider uppercase">
-                  {activePreset.name}
-                </span>
-                <span className="text-[11px] text-white/60 font-medium">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-black text-white tracking-wider uppercase drop-shadow">
+                    {activePreset.name}
+                  </span>
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[var(--color-accent)] text-white shadow-sm">
+                    H3
+                  </span>
+                </div>
+                <span className="text-[11px] text-white/70 font-semibold drop-shadow">
                   {activePreset.subtitle}
                 </span>
               </div>
@@ -486,9 +498,9 @@ export default function VideoStudio({ apiKey, initialSubTab, onSubTabChange }) {
             <button
               type="button"
               onClick={() => setShowPresetModal(true)}
-              className="text-xs font-semibold text-white/80 hover:text-white bg-white/5 hover:bg-white/10 px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer interactive-hover"
+              className="z-10 text-xs font-bold text-white bg-black/60 hover:bg-black/85 border border-white/20 backdrop-blur-md px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer interactive-hover shadow-md"
             >
-              <EditPencilIcon className="w-3.5 h-3.5 text-[var(--color-accent-text)]" />
+              <EditPencilIcon className="w-3.5 h-3.5 text-white/90" />
               <span>Change</span>
             </button>
           </div>
@@ -959,12 +971,15 @@ export default function VideoStudio({ apiKey, initialSubTab, onSubTabChange }) {
           {/* Parameters Grid */}
           <div className="flex flex-col gap-2.5 pt-2">
             {/* Model Row */}
-            <div className="flex items-center justify-between bg-[#18181f] p-2.5 rounded-xl">
+            <div className="flex items-center justify-between bg-[#18181f] p-2.5 rounded-xl border border-white/5">
               <span className="text-xs font-bold text-white/60">Model</span>
-              <span className="text-xs font-black text-[var(--color-accent-text)] flex items-center gap-1.5">
-                <span>MiniMax H3</span>
-                <SparkleIcon className="w-3.5 h-3.5 text-[var(--color-accent-text)]" />
-              </span>
+              <div className="flex items-center gap-2">
+                <img src="/assets/models/minimax-color.png" alt="MiniMax" className="w-4 h-4 object-contain" />
+                <span className="text-xs font-black text-white flex items-center gap-1.5">
+                  <span>MiniMax H3</span>
+                  <span className="text-[9px] text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">Active</span>
+                </span>
+              </div>
             </div>
 
             {/* Duration & Aspect Ratio */}
@@ -1062,10 +1077,13 @@ export default function VideoStudio({ apiKey, initialSubTab, onSubTabChange }) {
       {showPresetModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-[#111115] rounded-3xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-4 animate-scale-in">
-            <div className="flex items-center justify-between pb-3">
-              <h3 className="text-base font-black text-white uppercase tracking-wide">
-                Select Camera Preset
-              </h3>
+            <div className="flex items-center justify-between pb-1">
+              <div className="flex items-center gap-2">
+                <img src="/assets/models/minimax-color.png" alt="MiniMax" className="w-5 h-5 object-contain" />
+                <h3 className="text-base font-black text-white uppercase tracking-wide">
+                  MiniMax H3 Presets
+                </h3>
+              </div>
               <button
                 type="button"
                 onClick={() => setShowPresetModal(false)}
@@ -1073,6 +1091,19 @@ export default function VideoStudio({ apiKey, initialSubTab, onSubTabChange }) {
               >
                 <CloseIcon className="w-4 h-4" />
               </button>
+            </div>
+
+            {/* Modal Cover Banner */}
+            <div 
+              className="relative rounded-2xl h-24 p-3 flex flex-col justify-end overflow-hidden border border-white/10 shadow-inner"
+              style={{
+                backgroundImage: `linear-gradient(to top, rgba(17, 17, 21, 0.95), rgba(17, 17, 21, 0.2)), url('/assets/models/minimax-h3.png')`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center'
+              }}
+            >
+              <span className="text-[10px] font-black uppercase text-[var(--color-accent-text)] tracking-wider">MiniMax H3 Native Video</span>
+              <span className="text-xs text-white/90 font-medium">Kinematic camera control & continuous physics motion</span>
             </div>
             <div className="grid grid-cols-1 gap-2.5 max-h-80 overflow-y-auto custom-scrollbar">
               {CAMERA_PRESETS.map(preset => (
