@@ -1,5 +1,5 @@
 {
   "baseUrl": "http://127.0.0.1:42003",
   "wanRoot": "C:\\pinokio\\api\\wan.git\\app",
-  "ffmpeg": "C:\\pinokio\\bin\\miniforge\\Library\\bin\\ffmpeg.exe"
+  "ffmpeg": "C:\\openhiggs\\openhiggs\\engine\\ffmpeg_bins\\ffmpeg.exe"
 }

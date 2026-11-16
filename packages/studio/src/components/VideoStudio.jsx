@@ -347,7 +347,7 @@ export default function VideoStudio({ apiKey, initialSubTab, onSubTabChange }) {
     userPrompt: prompt,
     references,
     duration: parseInt(duration) || 5,
-    preset: activePreset.id,
+    preset: activePreset?.id || 'general',
   });
 
   const handleGenerate = async () => {
@@ -374,7 +374,7 @@ export default function VideoStudio({ apiKey, initialSubTab, onSubTabChange }) {
           references,
           duration: parseInt(duration) || 5,
           quality,
-          preset: activePreset.id,
+          preset: activePreset?.id || 'general',
           aspectRatio,
         }),
       });
@@ -484,14 +484,14 @@ export default function VideoStudio({ apiKey, initialSubTab, onSubTabChange }) {
               <div className="flex flex-col">
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs font-black text-white tracking-wider uppercase drop-shadow">
-                    {activePreset.name}
+                    {activePreset?.name || 'GENERAL'}
                   </span>
                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[var(--color-accent)] text-white shadow-sm">
                     H3
                   </span>
                 </div>
                 <span className="text-[11px] text-white/70 font-semibold drop-shadow">
-                  {activePreset.subtitle}
+                  {activePreset?.subtitle || 'MiniMax H3'}
                 </span>
               </div>
             </div>
@@ -1114,7 +1114,7 @@ export default function VideoStudio({ apiKey, initialSubTab, onSubTabChange }) {
                     setShowPresetModal(false);
                   }}
                   className={`p-3 rounded-2xl text-left flex items-center gap-3.5 transition-all ${
-                    activePreset.id === preset.id
+                    activePreset?.id === preset.id
                       ? 'bg-[var(--color-accent-subtle)] ring-2 ring-[var(--color-accent)] text-white'
                       : 'bg-[#18181f] hover:bg-[#22222b] text-white/80'
                   }`}

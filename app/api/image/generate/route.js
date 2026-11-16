@@ -3,6 +3,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { saveGeneration, runId } from '../../../../local-hosting/generation-history.mjs';
 import { getInstallRoot } from '../../../../local-hosting/root.mjs';
+import { generateImage } from '../../../../local-hosting/wan-client.mjs';
 
 export const runtime = 'nodejs';
 
@@ -49,42 +50,61 @@ export async function POST(request) {
   const authHeader = request.headers.get('authorization') || '';
   const apiKey = authHeader.replace(/^Bearer\s+/i, '').trim() || body.apiKey || process.env.MINIMAX_API_KEY || '';
 
-  // 1. Try local SGLang / vLLM / Diffusers server on standard ports (30000 or 8000)
-  const candidateUrls = [
-    process.env.MINIMAX_H3_IMAGE_URL,
-    'http://127.0.0.1:30000',
-    'http://127.0.0.1:8000'
-  ].filter(Boolean);
-
-  let generatedBuffer = null;
-
-  for (const baseUrl of candidateUrls) {
-    try {
-      const res = await fetch(`${baseUrl.replace(/\/$/, '')}/v1/images/generations`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: body.prompt,
-          size: sizeString,
-          response_format: 'b64_json',
-          output_format: 'png',
-          seed: body.seed ?? -1
-        }),
-        signal: AbortSignal.timeout(120000)
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const b64 = data?.data?.[0]?.b64_json;
-        if (b64) {
-          generatedBuffer = Buffer.from(b64, 'base64');
-          break;
+  // 1. Primary: Run directly through local Wan2GP GPU queue (100% local open-source)
+  try {
+    const configPath = path.join(root, 'config', 'wan-engine.json');
+    const rawConfig = await fs.readFile(configPath, 'utf8');
+    const config = JSON.parse(rawConfig.replace(/^\uFEFF/, ''));
+    if (config.baseUrl) {
+      const res = await generateImage({
+        base: config.baseUrl,
+        wanRoot: config.wanRoot,
+        wanOutputRoot: config.wanOutputRoot,
+        uploadsDir: path.join(root, 'data', 'uploads'),
+        outputDir,
+        body: {
+          ...body,
+          resolution: sizeString
         }
+      });
+      if (res?.fileName) {
+        const record = {
+          id,
+          runId,
+          createdAt: new Date().toISOString(),
+          status: 'completed',
+          model: modelName,
+          workflow: 'image',
+          prompt: body.prompt,
+          aspectRatio: normalizedAr,
+          resolution: sizeString,
+          url: res.imageUrl,
+          fileName: res.fileName
+        };
+        try {
+          await saveGeneration(record);
+        } catch (e) {
+          console.error('[ImageGenerate] Failed to record generation:', e);
+        }
+        return Response.json({
+          id,
+          url: res.imageUrl,
+          fileName: res.fileName,
+          model: modelName,
+          prompt: body.prompt
+        });
       }
-    } catch {}
+    }
+  } catch (wanErr) {
+    console.warn('[ImageGenerate] Wan2GP local generation failed/busy:', wanErr.message);
+    if (!apiKey) {
+      return Response.json({ error: wanErr.message || 'Local GPU generation failed. Ensure Wan2GP is running.' }, { status: 500 });
+    }
   }
 
-  // 2. If local server did not respond and an API key is provided, route through MiniMax Cloud API
-  if (!generatedBuffer && apiKey) {
+  // 2. Cloud Fallback if API key was explicitly provided
+  let generatedBuffer = null;
+  if (apiKey) {
     const cloudEndpoints = [
       'https://api.minimax.io/v1/image_generation',
       'https://api.minimaxi.chat/v1/image_generation',
@@ -99,10 +119,10 @@ export async function POST(request) {
               model: 'image-01',
               prompt: body.prompt,
               aspect_ratio: normalizedAr,
-              response_format: 'url'
+              response_format: 'base64'
             }
           : {
-              model: 'image-01',
+              model: 'minimax-h3-image',
               prompt: body.prompt,
               size: sizeString,
               response_format: 'b64_json'
@@ -115,12 +135,11 @@ export async function POST(request) {
             'Authorization': `Bearer ${apiKey}`
           },
           body: JSON.stringify(payload),
-          signal: AbortSignal.timeout(90000)
+          signal: AbortSignal.timeout(60000)
         });
 
         if (res.ok) {
           const data = await res.json();
-          // Check for URL or b64 response
           const imgUrl = data?.data?.[0]?.url || data?.image_url || data?.data?.image_url;
           const b64 = data?.data?.[0]?.b64_json || data?.b64_json;
 
@@ -142,14 +161,13 @@ export async function POST(request) {
     }
   }
 
-  // 3. If neither local inference server nor API key yielded a real image, return a clear diagnostic
   if (!generatedBuffer) {
     return Response.json({
-      error: 'MiniMax H3 Image local model is not running on port 30000. Please launch the local open-source model using "scripts\\Start MiniMax H3 Image.cmd".'
-    }, { status: 400 });
+      error: 'Generation failed. Local Wan2GP engine is currently busy or unavailable.'
+    }, { status: 500 });
   }
 
-  // 4. Save the generated PNG image to data/generations
+  // Save the generated image
   const fileName = `image_${id}.png`;
   const filePath = path.join(outputDir, fileName);
   await fs.writeFile(filePath, generatedBuffer);

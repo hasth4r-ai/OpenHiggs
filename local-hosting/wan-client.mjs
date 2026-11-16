@@ -54,7 +54,7 @@ export async function call(base, name, data, session, log=()=>{}) {
   throw new Error(`Wan2GP ${name} disconnected before completion`);
 }
 
-export async function generate({base,wanRoot,uploadsDir,outputDir,ffmpeg,body,control={requested:false}},send,log) {
+export async function generate({base,wanRoot,wanOutputRoot,uploadsDir,outputDir,ffmpeg,body,control={requested:false}},send,log) {
   const checkCancelled=()=>{if(control.requested)throw Object.assign(new Error('Cancelled by you.'),{name:'AbortError'});};
   checkCancelled();
   const session=randomUUID(), tag=`openhiggs_${session}`;
@@ -122,8 +122,9 @@ export async function generate({base,wanRoot,uploadsDir,outputDir,ffmpeg,body,co
   try { await call(base,'process_tasks_1',[],session,log); }
   finally {running=false;await polling;}
   checkCancelled();
-  const config=JSON.parse(await fs.readFile(path.join(wanRoot,'wgp_config.json'),'utf8'));
-  const root=path.resolve(wanRoot,config.save_path || 'outputs');
+  const outputRoot = wanOutputRoot || wanRoot;
+  const config=JSON.parse(await fs.readFile(path.join(outputRoot,'wgp_config.json'),'utf8'));
+  const root=path.resolve(outputRoot,config.save_path || 'outputs');
   async function find(dir) { for(const e of await fs.readdir(dir,{withFileTypes:true})) {const p=path.join(dir,e.name);if(e.isDirectory()){const found=await find(p);if(found)return found;}else if(e.name.startsWith(tag)&&/\.(mp4|mov|webm|mkv)$/i.test(e.name))return p;} }
   const result=await find(root);
   if(!result) throw new Error(`Wan2GP finished without a video. ${pollingError || 'Check the Wan2GP generation log for the engine error.'}`);
@@ -137,4 +138,110 @@ export async function generate({base,wanRoot,uploadsDir,outputDir,ffmpeg,body,co
     await fs.rename(partial,path.join(outputDir,name));
   } finally {await fs.unlink(partial).catch(()=>{});}
   send({type:'done',videoUrl:`/api/generations/${encodeURIComponent(name)}`,fileName:name});
+}
+
+export async function generateImage({base,wanRoot,wanOutputRoot,uploadsDir,outputDir,body,control={requested:false}},send=()=>{},log=()=>{}) {
+  const checkCancelled=()=>{if(control.requested)throw Object.assign(new Error('Cancelled by you.'),{name:'AbortError'});};
+  checkCancelled();
+  const session=randomUUID(), tag=`openhiggs_img_${session}`;
+  const snapshot=async()=>{const r=await fetch(`${base}/deepy/deepy_api/state`); if(!r.ok) throw new Error('Wan2GP shared generation API is unavailable'); return r.json();};
+  const initial=await snapshot();
+  if(initial.busy || initial.progress) throw new Error('Wan2GP is busy. Wait for its current job to finish.');
+
+  const isMiniMax = body.model ? String(body.model).toLowerCase().includes('minimax') : true;
+  const settingsFile = isMiniMax ? 'minimax_h3_ref2va_pruned_settings.json' : 'ming_image_0_1_design_settings.json';
+  const defaultModelType = isMiniMax ? 'minimax_h3_ref2va_pruned' : 'ming_image_0_1_design';
+
+  const settings=JSON.parse(await fs.readFile(path.join(wanRoot,'settings',settingsFile),'utf8'));
+  const files=[];
+  const targetRes = body.resolution || '1024x1024';
+
+  Object.assign(settings, {
+    model_type: defaultModelType,
+    image_mode: 1,
+    prompt: body.prompt,
+    resolution: targetRes,
+    num_inference_steps: Number(body.steps) || (isMiniMax ? 8 : 12),
+    batch_size: 1,
+    repeat_generation: 1,
+    seed: Number(body.seed) >= 0 ? Number(body.seed) : -1,
+    output_filename: tag,
+    client_id: session
+  });
+
+  files.unshift(['queue.json', Buffer.from(JSON.stringify([{ id: 1, params: settings }]))]);
+  const form=new FormData();
+  form.append('files', new Blob([zipFiles(files)]), 'openhiggs.zip');
+  checkCancelled();
+
+  const upload=await fetch(`${base}/gradio_api/upload`, { method: 'POST', body: form });
+  if(!upload.ok) throw new Error(`Wan2GP upload failed: HTTP ${upload.status}`);
+  const [uploaded]=await upload.json();
+
+  let accepted=false, rejection='';
+  await call(base, 'load_queue_action', [{ path: uploaded, meta: { _type: 'gradio.FileData' } }], session, v => {
+    log?.(v);
+    if(v.engine?.log?.match(/(?:Loaded|Merged) 1 task/)) accepted = true;
+    if(v.engine?.level === 'warning') rejection = v.engine.log;
+  });
+
+  if(!accepted) throw new Error(rejection || 'Wan2GP did not accept the image generation task.');
+  await call(base, 'init_process_queue_if_any', [], session, log);
+
+  let running=true, pollingError=null, sample=null, abortSent=false;
+  const polling=(async () => {
+    while(running) {
+      try {
+        const s=await snapshot(), p=s.progress;
+        if(control.requested && p && !abortSent && running) {
+          const stopped=await fetch(`${base}/deepy/deepy_api/control`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'abort', payload: {} }) });
+          if(!stopped.ok) throw new Error('Wan2GP cancellation was not accepted. Retrying…');
+          abortSent = true;
+        }
+        if(p) {
+          const d=p.type==='progress'?p.data:[], position=d[0], phase=p.description || 'Sampling Image';
+          const step=Array.isArray(position) ? Number(position[0]) : 0, total=Array.isArray(position) ? Number(position[1]) : 0;
+          const pct=total ? 100 * step / total : typeof position === 'number' ? 100 * position : 0;
+          let eta=null;
+          if(total && step > 0 && /denois|sampling/i.test(phase)) {
+            if(!sample || sample.total !== total || step < sample.step) sample = { step, total, time: Date.now() };
+            else if(step > sample.step) eta = Math.max(0, (Date.now() - sample.time) / 1000 / (step - sample.step) * (total - step));
+          } else sample = null;
+          send?.({ type: 'progress', pct: Math.max(0, Math.min(100, pct)), step, total, phase: control.requested ? 'Cancelling…' : phase, eta: control.requested ? null : eta });
+        }
+      } catch(e) { pollingError = e.message; }
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  })();
+
+  try { await call(base, 'process_tasks_1', [], session, log); }
+  finally { running = false; await polling; }
+  checkCancelled();
+
+  const outputRoot = wanOutputRoot || wanRoot;
+  const config=JSON.parse(await fs.readFile(path.join(outputRoot, 'wgp_config.json'), 'utf8'));
+  const rootDir=path.resolve(outputRoot, config.save_path || 'outputs');
+  async function find(dir) {
+    for(const e of await fs.readdir(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if(e.isDirectory()) {
+        const found = await find(p);
+        if(found) return found;
+      } else if(e.name.startsWith(tag) && /\.(png|jpg|jpeg|webp)$/i.test(e.name)) {
+        return p;
+      }
+    }
+  }
+
+  const result=await find(rootDir);
+  if(!result) throw new Error(`Wan2GP finished without an output image. ${pollingError || 'Check Wan2GP log.'}`);
+
+  await fs.mkdir(outputDir, { recursive: true });
+  const ext=path.extname(result);
+  const outName=`${tag}${ext}`;
+  const destPath=path.join(outputDir, outName);
+  await fs.copyFile(result, destPath);
+
+  send?.({ type: 'done', imageUrl: `/api/generations/${encodeURIComponent(outName)}`, fileName: outName });
+  return { imageUrl: `/api/generations/${encodeURIComponent(outName)}`, fileName: outName };
 }

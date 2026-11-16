@@ -41,7 +41,7 @@ export async function POST(request) {
         try {
           const config=JSON.parse((await fs.readFile(path.join(root,'config','wan-engine.json'),'utf8')).replace(/^\uFEFF/,''));
           send({type:'start',message:'Connecting to running Wan2GP...'});
-          await runInpaint({base:config.baseUrl,wanRoot:config.wanRoot,ffmpeg:config.ffmpeg,uploadsDir:path.join(root,'data','uploads'),outputDir:path.join(root,'data','generations'),body,control},data=>{
+          await runInpaint({base:config.baseUrl,wanRoot:config.wanRoot,wanOutputRoot:config.wanOutputRoot,ffmpeg:config.ffmpeg,uploadsDir:path.join(root,'data','uploads'),outputDir:path.join(root,'data','generations'),body,control},data=>{
             if(data.type==='progress') Object.assign(record,{progress:data.pct,phase:data.phase,eta:data.eta,step:data.step,total:data.total});
             if(data.type==='done') Object.assign(record,{status:'completed',progress:100,videoUrl:data.videoUrl,fileName:data.fileName,originalUrl:data.originalUrl,originalFileName:data.originalFileName,resolution:data.resolution,duration:data.duration,fps:data.fps,completedAt:new Date().toISOString()});
             if(data.type==='done')control.finished=true;

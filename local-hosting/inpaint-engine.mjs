@@ -14,7 +14,7 @@ const request=async(url,options={})=>{
     throw new Error('Wan2GP '+new URL(url).pathname+': '+(error.cause?.message||error.message),{cause:error});
   }
 };
-export async function runInpaint({base,wanRoot,uploadsDir,outputDir,ffmpeg,body,control},send,log) {
+export async function runInpaint({base,wanRoot,wanOutputRoot,uploadsDir,outputDir,ffmpeg,body,control},send,log) {
   const session=randomUUID(),tag=`inpaint_${session}`,check=()=>{if(control.requested)throw Object.assign(new Error('Cancelled by you.'),{name:'AbortError'});};
   const snapshot=async()=>{const r=await request(`${base}/deepy/deepy_api/state`);if(!r.ok)throw new Error('Wan2GP is not reachable.');return r.json();};
   const initial=await snapshot();if(initial.busy||initial.progress)throw new Error('Wan2GP is busy. Wait for the current generation to finish.');
@@ -60,9 +60,10 @@ export async function runInpaint({base,wanRoot,uploadsDir,outputDir,ffmpeg,body,
       send({type:'progress',pct:Math.max(0,Math.min(100,pct)),step,total,phase:control.requested?'Cancelling…':p.description,eta:control.requested?null:eta});}
   }catch(e){log({pollError:e.message});}await new Promise(r=>setTimeout(r,1000));}})();
   try{await call(base,'process_tasks_1',[],session,log);}finally{running=false;await poll;}check();
-  const config=JSON.parse(await fs.readFile(path.join(wanRoot,'wgp_config.json'),'utf8'));
+  const outputRoot = wanOutputRoot || wanRoot;
+  const config=JSON.parse(await fs.readFile(path.join(outputRoot,'wgp_config.json'),'utf8'));
   async function find(dir){for(const entry of await fs.readdir(dir,{withFileTypes:true})){const full=path.join(dir,entry.name);if(entry.isDirectory()){const found=await find(full);if(found)return found;}else if(entry.name.startsWith(tag)&&/\.(mov|mp4|mkv|webm)$/i.test(entry.name))return full;}}
-  const generated=await find(path.resolve(wanRoot,config.save_path||'outputs'));if(!generated)throw new Error('Wan2GP did not produce an edited video. Inspect its generation log.');
+  const generated=await find(path.resolve(outputRoot,config.save_path||'outputs'));if(!generated)throw new Error('Wan2GP did not produce an edited video. Inspect its generation log.');
   const generatedInfo=await probeVideo(ffmpeg,generated);
   if(generatedInfo.frames < Math.min(info.frames - 2, 16) || Math.abs(generatedInfo.fps - info.fps) > 0.5)throw new Error('The model output does not match the source timeline. Original footage was preserved; no misaligned composite was exported.');
   phase('Exporting master ProRes and preview');
