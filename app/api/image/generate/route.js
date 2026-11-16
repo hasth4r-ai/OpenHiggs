@@ -50,6 +50,8 @@ export async function POST(request) {
   const authHeader = request.headers.get('authorization') || '';
   const apiKey = authHeader.replace(/^Bearer\s+/i, '').trim() || body.apiKey || process.env.MINIMAX_API_KEY || '';
 
+  const batchCount = Math.max(1, Math.min(4, Number(body.batch_size || body.batchCount || 1)));
+
   // Initial pending record in history feed (matches VideoStudio and standard platforms)
   const record = {
     id,
@@ -61,6 +63,7 @@ export async function POST(request) {
     prompt: body.prompt,
     aspectRatio: normalizedAr,
     resolution: sizeString,
+    batchCount,
     progress: 5,
     phase: 'Preparing local GPU pipeline',
     eta: null
@@ -86,6 +89,7 @@ export async function POST(request) {
           outputDir,
           body: {
             ...body,
+            batch_size: batchCount,
             resolution: sizeString
           }
         },
@@ -104,12 +108,18 @@ export async function POST(request) {
       );
 
       if (res?.fileName) {
+        const images = (res.results && res.results.length)
+          ? res.results.map(r => ({ url: r.imageUrl, fileName: r.fileName }))
+          : [{ url: res.imageUrl, fileName: res.fileName }];
+
         Object.assign(record, {
           status: 'completed',
           progress: 100,
           phase: 'Completed',
           url: res.imageUrl,
           fileName: res.fileName,
+          images,
+          batchCount: images.length,
           completedAt: new Date().toISOString()
         });
         await saveGeneration(record);
@@ -117,6 +127,8 @@ export async function POST(request) {
           id,
           url: res.imageUrl,
           fileName: res.fileName,
+          images,
+          batchCount: images.length,
           model: modelName,
           prompt: body.prompt
         });

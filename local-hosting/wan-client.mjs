@@ -164,6 +164,8 @@ export async function generateImage({base,wanRoot,wanOutputRoot,uploadsDir,outpu
     targetRes = '1024x1024';
   }
 
+  const batchCount = Math.max(1, Math.min(4, Number(body.batch_size || body.batchCount || 1)));
+
   Object.assign(settings, {
     model_type: defaultModelType,
     image_mode: 1,
@@ -177,7 +179,21 @@ export async function generateImage({base,wanRoot,wanOutputRoot,uploadsDir,outpu
     client_id: session
   });
 
-  files.unshift(['queue.json', Buffer.from(JSON.stringify([{ id: 1, params: settings }]))]);
+  const queueTasks = [];
+  for (let i = 0; i < batchCount; i++) {
+    queueTasks.push({
+      id: i + 1,
+      params: {
+        ...settings,
+        batch_size: 1,
+        repeat_generation: 1,
+        seed: Number(body.seed) >= 0 ? (Number(body.seed) + i) : -1,
+        output_filename: batchCount === 1 ? tag : `${tag}_${i + 1}`
+      }
+    });
+  }
+
+  files.unshift(['queue.json', Buffer.from(JSON.stringify(queueTasks))]);
   const form=new FormData();
   form.append('files', new Blob([zipFiles(files)]), 'openhiggs.zip');
   checkCancelled();
@@ -189,7 +205,7 @@ export async function generateImage({base,wanRoot,wanOutputRoot,uploadsDir,outpu
   let accepted=false, rejection='';
   await call(base, 'load_queue_action', [{ path: uploaded, meta: { _type: 'gradio.FileData' } }], session, v => {
     log?.(v);
-    if(v.engine?.log?.match(/(?:Loaded|Merged) 1 task/)) accepted = true;
+    if(v.engine?.log?.match(/(?:Loaded|Merged) \d+ task/)) accepted = true;
     if(v.engine?.level === 'warning') rejection = v.engine.log;
   });
 
@@ -229,27 +245,48 @@ export async function generateImage({base,wanRoot,wanOutputRoot,uploadsDir,outpu
   const outputRoot = wanOutputRoot || wanRoot;
   const config=JSON.parse(await fs.readFile(path.join(outputRoot, 'wgp_config.json'), 'utf8'));
   const rootDir=path.resolve(outputRoot, config.save_path || 'outputs');
-  async function find(dir) {
-    for(const e of await fs.readdir(dir, { withFileTypes: true })) {
+  async function findAll(dir) {
+    let found = [];
+    for(const e of await fs.readdir(dir, { withFileTypes: true }).catch(() => [])) {
       const p = path.join(dir, e.name);
       if(e.isDirectory()) {
-        const found = await find(p);
-        if(found) return found;
+        const sub = await findAll(p);
+        found = found.concat(sub);
       } else if(e.name.startsWith(tag) && /\.(png|jpg|jpeg|webp)$/i.test(e.name)) {
-        return p;
+        found.push(p);
       }
     }
+    return found;
   }
 
-  const result=await find(rootDir);
-  if(!result) throw new Error(`Wan2GP finished without an output image. ${pollingError || 'Check Wan2GP log.'}`);
+  const matches = await findAll(rootDir);
+  if(!matches.length) throw new Error(`Wan2GP finished without an output image. ${pollingError || 'Check Wan2GP log.'}`);
+
+  matches.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
 
   await fs.mkdir(outputDir, { recursive: true });
-  const ext=path.extname(result);
-  const outName=`${tag}${ext}`;
-  const destPath=path.join(outputDir, outName);
-  await fs.copyFile(result, destPath);
+  const results = [];
+  for (let idx = 0; idx < matches.length; idx++) {
+    const src = matches[idx];
+    const ext = path.extname(src);
+    const outName = matches.length === 1 ? `${tag}${ext}` : `${tag}_${idx + 1}${ext}`;
+    const destPath = path.join(outputDir, outName);
+    await fs.copyFile(src, destPath);
+    results.push({
+      imageUrl: `/api/generations/${encodeURIComponent(outName)}`,
+      fileName: outName
+    });
+  }
 
-  send?.({ type: 'done', imageUrl: `/api/generations/${encodeURIComponent(outName)}`, fileName: outName });
-  return { imageUrl: `/api/generations/${encodeURIComponent(outName)}`, fileName: outName };
+  send?.({
+    type: 'done',
+    imageUrl: results[0]?.imageUrl,
+    fileName: results[0]?.fileName,
+    results
+  });
+  return {
+    results,
+    imageUrl: results[0]?.imageUrl,
+    fileName: results[0]?.fileName
+  };
 }

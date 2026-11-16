@@ -51,18 +51,32 @@ export async function listGenerations({ includeDeleted = false } = {}) {
   try {
     const outFiles = await fs.readdir(outputs);
     for (const name of outFiles) {
-      if (!/\.mp4$/i.test(name) || known.has(name)) continue;
+      if (known.has(name)) continue;
       const stat = await fs.stat(path.join(outputs, name));
-      validRecords.push({
-        id: name,
-        fileName: name,
-        videoUrl: `/api/generations/${encodeURIComponent(name)}`,
-        createdAt: stat.mtime.toISOString(),
-        status: 'completed',
-        prompt: '',
-        model: 'MiniMax H3',
-        references: []
-      });
+      if (/\.mp4$/i.test(name)) {
+        validRecords.push({
+          id: name,
+          fileName: name,
+          videoUrl: `/api/generations/${encodeURIComponent(name)}`,
+          createdAt: stat.mtime.toISOString(),
+          status: 'completed',
+          prompt: '',
+          model: 'MiniMax H3',
+          references: []
+        });
+      } else if (/\.(png|jpe?g|webp)$/i.test(name)) {
+        validRecords.push({
+          id: name,
+          fileName: name,
+          url: `/api/generations/${encodeURIComponent(name)}`,
+          workflow: 'image',
+          createdAt: stat.mtime.toISOString(),
+          status: 'completed',
+          prompt: '',
+          model: 'MiniMax H3 Image',
+          references: []
+        });
+      }
     }
   } catch {
     // Outputs folder may be empty

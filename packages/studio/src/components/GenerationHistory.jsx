@@ -27,6 +27,7 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
   const [items,setItems]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState('');
   const [query,setQuery]=useState(''),[filter,setFilter]=useState('all'),[view,setView]=useState('list');
   const [detail,setDetail]=useState(null),[notice,setNotice]=useState(''),[now,setNow]=useState(Date.now());
+  const [selectedVarIndex,setSelectedVarIndex]=useState(0);
   const dialog=useRef(null);
   const [pending,setPending]=useState(null);
   const [deleted,setDeleted]=useState(null);
@@ -72,45 +73,121 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
   const filtered=typeFiltered.filter(i=>(filter==='all'||i.status===filter||(filter==='failed'&&i.status==='interrupted'))&&`${i.prompt} ${i.model} ${i.fileName}`.toLowerCase().includes(query.toLowerCase()));
   const groups=Object.entries(filtered.reduce((out,item)=>{(out[dateLabel(item.createdAt)] ||= []).push(item);return out;},{}));
   const button='rounded-lg bg-white/5 hover:bg-white/10 px-3 py-2 text-xs font-medium text-white/80 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all interactive-hover';
-  const actions=item=>{
-    const mediaUrl = item.videoUrl || item.url || item.imageUrl;
+  const actions=(item, activeVar = null)=>{
+    const currentMedia = activeVar || (item.images && item.images[selectedVarIndex]) || (item.images && item.images[0]) || { url: item.videoUrl || item.url || item.imageUrl, fileName: item.fileName };
+    const mediaUrl = currentMedia.url;
     return (
       <div className="flex flex-wrap items-center gap-2 mt-4">
         <button className={button} disabled={!item.prompt||busy} onClick={()=>{onReuse(item);dialog.current?.close();setNotice('Settings restored.');}}>Reuse settings</button>
         <button className={button} disabled={!item.prompt} onClick={()=>copy(item)}>Copy prompt</button>
-        {mediaUrl && <a className={button+' flex items-center gap-1.5'} href={mediaUrl} download={item.fileName || 'download'}><DownloadIcon className="w-3.5 h-3.5"/>Download</a>}
+        {mediaUrl && <a className={button+' flex items-center gap-1.5'} href={mediaUrl} download={currentMedia.fileName || item.fileName || 'download'}><DownloadIcon className="w-3.5 h-3.5"/>Download {activeVar ? 'variation' : ''}</a>}
+        {item.images?.length > 1 && !activeVar && (
+          <span className="text-[11px] text-white/40 font-mono self-center ml-1">({item.images.length} images)</span>
+        )}
         {item.originalUrl && <a className={button+' !text-[var(--color-accent)] font-semibold'} href={item.originalUrl} download={item.originalFileName}>Download ProRes MOV</a>}
         {item.status==='generating'?<button className={button+' !text-red-300'} disabled={pending===item.id||item.cancelRequested} onClick={()=>act(item,'cancel')}>{item.cancelRequested?'Cancelling…':'Cancel task'}</button>:<button className={button+' !text-white/40 hover:!text-red-300'} disabled={pending===item.id} onClick={()=>act(item,'delete')}>Delete from history</button>}
       </div>
     );
   };
-  const preview=item=>{
+  const preview=(item, inModal = false)=>{
+    const isImage = item.workflow === 'image' || (item.model && item.model.toLowerCase().includes('image')) || /\.(png|jpe?g|webp)$/i.test(item.fileName || item.url || '');
+    const images = item.images && item.images.length ? item.images : (item.url || item.imageUrl) ? [{ url: item.url || item.imageUrl, fileName: item.fileName }] : [];
     const mediaUrl = item.videoUrl || item.url || item.imageUrl;
-    const isImage = item.workflow === 'image' || (!item.videoUrl && (item.url || item.imageUrl));
-    if (item.status === 'completed' && mediaUrl) {
+
+    if (item.status === 'completed') {
       if (isImage) {
+        if (inModal) {
+          const activeImg = images[selectedVarIndex] || images[0] || { url: mediaUrl };
+          return (
+            <div className="w-full h-full flex flex-col items-center justify-center p-4">
+              <img 
+                key={activeImg.url} 
+                src={activeImg.url} 
+                alt={item.prompt || 'Generated image'} 
+                className="max-w-full max-h-[60vh] object-contain rounded-xl select-none shadow-2xl" 
+              />
+              {images.length > 1 && (
+                <div className="flex items-center gap-2 mt-4 bg-white/5 p-1.5 rounded-xl border border-white/5">
+                  {images.map((img, idx) => (
+                    <button
+                      key={img.url || idx}
+                      type="button"
+                      onClick={() => setSelectedVarIndex(idx)}
+                      className={`relative w-12 h-12 rounded-lg overflow-hidden border-2 transition-all ${selectedVarIndex === idx ? 'border-[var(--color-accent)] ring-2 ring-[var(--color-accent)]/30 scale-105' : 'border-transparent opacity-60 hover:opacity-100'}`}
+                    >
+                      <img src={img.url} alt={`Var ${idx + 1}`} className="w-full h-full object-cover" />
+                      <span className="absolute bottom-0.5 right-0.5 bg-black/80 px-1 py-0.2 rounded text-[9px] font-mono text-white/90">#{idx + 1}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        if (images.length > 1) {
+          const count = images.length;
+          return (
+            <div 
+              className={`w-full h-full p-2 grid ${count === 2 ? 'grid-cols-2' : 'grid-cols-2 grid-rows-2'} gap-2 bg-[#0c0c10] select-none cursor-pointer`}
+              onClick={() => { setSelectedVarIndex(0); setDetail(item); }}
+              title="Click to view all variations"
+            >
+              {images.slice(0, 4).map((img, idx) => (
+                <div 
+                  key={img.url || idx}
+                  className="relative group/var rounded-lg overflow-hidden bg-black/50 border border-white/5 hover:border-[var(--color-accent)] transition-all flex items-center justify-center"
+                  onClick={(e) => { e.stopPropagation(); setSelectedVarIndex(idx); setDetail(item); }}
+                >
+                  <img 
+                    src={img.url} 
+                    alt={`Variation ${idx + 1}`} 
+                    className="w-full h-full object-cover transition-transform group-hover/var:scale-105" 
+                    loading="lazy" 
+                  />
+                  <span className="absolute top-1 left-1 bg-black/70 backdrop-blur px-1.5 py-0.5 rounded text-[10px] font-mono text-white/80 border border-white/10">
+                    #{idx + 1}
+                  </span>
+                </div>
+              ))}
+            </div>
+          );
+        }
+
+        if (images.length === 1 || mediaUrl) {
+          const singleUrl = images[0]?.url || mediaUrl;
+          return (
+            <div 
+              className="w-full h-full flex items-center justify-center bg-[#0c0c10] cursor-pointer"
+              onClick={() => { setSelectedVarIndex(0); setDetail(item); }}
+            >
+              <img 
+                key={singleUrl} 
+                src={singleUrl} 
+                alt={item.prompt || 'Generated image'} 
+                className="w-full h-full object-contain select-none" 
+                loading="lazy"
+              />
+            </div>
+          );
+        }
+      }
+
+      if (!isImage && item.videoUrl) {
         return (
-          <img 
-            key={mediaUrl} 
-            src={mediaUrl} 
-            alt={item.prompt || 'Generated image'} 
-            className="w-full h-full object-contain bg-[var(--bg-card,#14141a)] select-none" 
-            loading="lazy"
+          <video 
+            key={item.videoUrl} 
+            src={`${item.videoUrl}#t=0.1`} 
+            controls 
+            playsInline 
+            preload="metadata" 
+            className="w-full h-full object-contain bg-[var(--bg-card,#14141a)]" 
+            aria-label={`Generated video: ${item.prompt || 'Previous generation'}`}
           />
         );
       }
-      return (
-        <video 
-          key={mediaUrl} 
-          src={`${mediaUrl}#t=0.1`} 
-          controls 
-          playsInline 
-          preload="metadata" 
-          className="w-full h-full object-contain bg-[var(--bg-card,#14141a)]" 
-          aria-label={`Generated video: ${item.prompt || 'Previous generation'}`}
-        />
-      );
     }
+
     return (
       <div className="min-h-52 h-full flex flex-col justify-center items-center p-7 text-center gap-3 bg-[var(--bg-card,#14141a)]">
         {item.status==='generating'?<><span className="w-8 h-8 border-2 border-white/10 border-t-[var(--color-accent)] rounded-full animate-spin"/><p className="text-xs text-white/80">{item.phase || 'Generating…'}</p><div role="progressbar" aria-label="Generation progress" aria-valuenow={Math.round(item.progress||0)} aria-valuemin={0} aria-valuemax={100} className="w-full max-w-xs h-1.5 bg-white/10 rounded-full overflow-hidden"><div className="h-full bg-[var(--color-accent)] transition-all" style={{width:`${item.progress||0}%`}}/></div><p className="text-xs text-white/45">{Math.round(item.progress||0)}% · {time((now-Date.parse(item.createdAt))/1000)} elapsed</p><p className="text-xs text-white/45">{Number.isFinite(item.eta)?`About ${time(item.eta)} left in this sampling pass`:'Estimating remaining time…'}</p></>:<><ClapperboardIcon className="w-8 h-8 text-white/30"/><p className="text-sm text-red-300">{item.status==='cancelled'?'Generation cancelled':item.status==='interrupted'?'Generation interrupted':'Generation failed'}</p><p className="text-xs text-white/50 max-w-xs">{item.error}</p></>}
@@ -142,23 +219,53 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
     {error && <p role="alert" className="mx-6 mt-4 text-sm text-red-300">{error}</p>}
     {(notice||deleted) && <div role="status" className="fixed z-50 right-8 bottom-6 bg-[var(--color-accent)] text-white rounded-xl px-4 py-3 text-sm shadow-xl animate-scale-in">{notice||'Entry removed. Saved video kept.'}{deleted&&<button className="ml-4 underline font-semibold" disabled={pending===deleted.id} onClick={()=>act(deleted,'restore')}>Undo delete</button>}{deleted&&<button aria-label="Dismiss deletion notice" className="ml-4" onClick={()=>{setDeleted(null);setNotice('');}}>×</button>}</div>}
     <div className="px-6 pb-12">
-      {loading?<p className="py-12 text-sm text-white/40">Loading your videos…</p>:groups.length===0?<div className="min-h-[55vh] flex flex-col items-center justify-center text-center gap-3"><ClapperboardIcon className="w-10 h-10 text-white/20"/><h1 className="text-lg font-semibold">{items.length?'No matching videos':'Your videos will appear here'}</h1><p className="text-sm text-white/40">{items.length?'Try another search or filter.':'Add references and a prompt, then click Generate.'}</p></div>:groups.map(([day,entries])=><section key={day} aria-label={day}>
+      {loading?<p className="py-12 text-sm text-white/40">Loading {mediaType === 'image' ? 'images' : mediaType === 'video' ? 'videos' : 'generations'}…</p>:groups.length===0?<div className="min-h-[55vh] flex flex-col items-center justify-center text-center gap-3"><ClapperboardIcon className="w-10 h-10 text-white/20"/><h1 className="text-lg font-semibold">{items.length?`No matching ${mediaType === 'image' ? 'images' : mediaType === 'video' ? 'videos' : 'generations'}`:`Your ${mediaType === 'image' ? 'images' : mediaType === 'video' ? 'videos' : 'generations'} will appear here`}</h1><p className="text-sm text-white/40">{items.length?'Try another search or filter.':'Add references and a prompt, then click Generate.'}</p></div>:groups.map(([day,entries])=><section key={day} aria-label={day}>
         <h2 className="text-xs font-medium text-white/45 py-5">{day}<span className="ml-2 text-white/20">{entries.length}</span></h2>
         <div className={view==='list'?'flex flex-col gap-4':view==='grid'?'grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4':'columns-1 xl:columns-2 2xl:columns-3 gap-4'}>
-          {entries.map(item=><article key={item.id} className={`bg-[var(--bg-card,#14141a)] shadow-lg rounded-2xl overflow-hidden ${view==='list'?'flex flex-col xl:flex-row':view==='masonry'?'break-inside-avoid mb-4':''}`}>
-            <div className={`relative bg-[var(--bg-card,#14141a)] ${view==='list'?'xl:w-[44%] xl:max-w-[620px] shrink-0 aspect-video':view==='masonry'?'min-h-40':'aspect-video'}`}>{preview(item)}</div>
-            <div className="p-5 flex flex-col min-w-0 flex-1 bg-[var(--bg-card,#14141a)]">
-              <div className="flex items-center gap-2 text-[11px] text-white/40"><span className="text-white/70 font-medium">{getModelName(item)}</span><span>·</span><span>{item.quality || item.resolution || 'Local video'}</span>{item.duration&&<><span>·</span><span>{item.duration}s</span></>}<time className="ml-auto" dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</time></div>
-              <button className="mt-3 text-sm leading-relaxed text-white/85 text-left line-clamp-3 hover:text-white" onClick={()=>setDetail(item)} aria-label="Open generation details">{item.prompt || 'Prompt unavailable for this older generation.'}</button>
-              {!!item.references?.length&&<div className="flex gap-2 mt-3">{item.references.map((ref,i)=><div key={ref.id||i} title={ref.tag || ref.name} className="w-9 h-9 rounded-md overflow-hidden bg-black/50">{ref.type==='image'?<img alt={ref.tag||'Reference image'} src={ref.url} className="w-full h-full object-cover"/>:<span className="text-[9px] flex items-center justify-center h-full">{ref.type}</span>}</div>)}</div>}
-              <div className="mt-auto">{actions(item)}<button className="text-[11px] text-white/60 mt-3 hover:underline hover:text-white" onClick={()=>setDetail(item)}>View details ↗</button></div>
-            </div>
-          </article>)}
+          {entries.map(item=>{
+            const itemIsImage = item.workflow === 'image' || (item.model && item.model.toLowerCase().includes('image')) || /\.(png|jpe?g|webp)$/i.test(item.fileName || item.url || '');
+            const hasMultiple = item.images && item.images.length > 1;
+            return (
+              <article key={item.id} className={`bg-[var(--bg-card,#14141a)] shadow-lg rounded-2xl overflow-hidden border border-white/5 hover:border-white/10 transition-all ${view==='list'?'flex flex-col xl:flex-row':view==='masonry'?'break-inside-avoid mb-4':''}`}>
+                <div className={`relative bg-[#0c0c10] overflow-hidden ${
+                  view === 'list'
+                    ? itemIsImage
+                      ? 'xl:w-[380px] 2xl:w-[440px] shrink-0 min-h-[260px] aspect-square flex items-center justify-center'
+                      : 'xl:w-[44%] xl:max-w-[620px] shrink-0 aspect-video'
+                    : view === 'masonry'
+                    ? 'min-h-40'
+                    : itemIsImage ? 'aspect-square' : 'aspect-video'
+                }`}>
+                  {preview(item)}
+                </div>
+                <div className="p-5 flex flex-col min-w-0 flex-1 bg-[var(--bg-card,#14141a)]">
+                  <div className="flex items-center gap-2 text-[11px] text-white/40">
+                    <span className="text-white/70 font-medium">{getModelName(item)}</span>
+                    <span>·</span>
+                    <span>{item.quality || item.resolution || (itemIsImage ? 'Local image' : 'Local video')}</span>
+                    {hasMultiple && (
+                      <>
+                        <span>·</span>
+                        <span className="px-1.5 py-0.5 rounded bg-[var(--color-accent)]/20 text-[var(--color-accent)] text-[10px] font-semibold">
+                          Batch of {item.images.length}
+                        </span>
+                      </>
+                    )}
+                    {item.duration&&<><span>·</span><span>{item.duration}s</span></>}
+                    <time className="ml-auto" dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</time>
+                  </div>
+                  <button className="mt-3 text-sm leading-relaxed text-white/85 text-left line-clamp-3 hover:text-white" onClick={()=>{setSelectedVarIndex(0);setDetail(item);}} aria-label="Open generation details">{item.prompt || 'Prompt unavailable for this older generation.'}</button>
+                  {!!item.references?.length&&<div className="flex gap-2 mt-3">{item.references.map((ref,i)=><div key={ref.id||i} title={ref.tag || ref.name} className="w-9 h-9 rounded-md overflow-hidden bg-black/50">{ref.type==='image'?<img alt={ref.tag||'Reference image'} src={ref.url} className="w-full h-full object-cover"/>:<span className="text-[9px] flex items-center justify-center h-full">{ref.type}</span>}</div>)}</div>}
+                  <div className="mt-auto">{actions(item)}<button className="text-[11px] text-white/60 mt-3 hover:underline hover:text-white" onClick={()=>{setSelectedVarIndex(0);setDetail(item);}}>View details ↗</button></div>
+                </div>
+              </article>
+            );
+          })}
         </div>
       </section>)}
     </div>
     <dialog ref={dialog} onCancel={()=>setDetail(null)} onClose={()=>setDetail(null)} onClick={e=>{if(e.target===dialog.current)dialog.current.close();}} className="fixed inset-0 m-auto w-[min(1100px,92vw)] max-h-[90vh] rounded-3xl bg-[#111115] text-white p-0 shadow-2xl backdrop:bg-black/80 animate-scale-in">
-      {detail&&<><header className="p-4 flex items-center justify-between"><h2 className="font-semibold text-sm">Generation details</h2><button aria-label="Close generation details" onClick={()=>dialog.current.close()} className={button}><CloseIcon className="w-4 h-4"/></button></header><div className="grid lg:grid-cols-[1.4fr_1fr]"><div className="bg-black flex items-center justify-center">{preview(detail)}</div><div className="p-6 max-h-[70vh] overflow-y-auto"><p className="text-xs text-white/40">{getModelName(detail)} · {new Date(detail.createdAt).toLocaleString()}</p><h3 className="mt-6 text-xs text-white/50">{detail.promptSource==='embedded'?'Saved model prompt':'Prompt'}</h3><p className="mt-2 text-sm leading-relaxed whitespace-pre-wrap">{detail.prompt||'The original prompt was not saved.'}</p>{detail.resolution&&<p className="text-xs mt-4 text-white/50">Resolution: {detail.resolution}</p>}{detail.seed!==undefined&&<p className="text-xs mt-2 text-white/50">Seed: {detail.seed}</p>}{actions(detail)}</div></div></>}
+      {detail&&<><header className="p-4 flex items-center justify-between border-b border-white/5"><h2 className="font-semibold text-sm">Generation details</h2><button aria-label="Close generation details" onClick={()=>dialog.current.close()} className={button}><CloseIcon className="w-4 h-4"/></button></header><div className="grid lg:grid-cols-[1.4fr_1fr]"><div className="bg-black flex items-center justify-center min-h-[350px]">{preview(detail, true)}</div><div className="p-6 max-h-[70vh] overflow-y-auto"><p className="text-xs text-white/40">{getModelName(detail)} · {new Date(detail.createdAt).toLocaleString()}</p><h3 className="mt-6 text-xs text-white/50">{detail.promptSource==='embedded'?'Saved model prompt':'Prompt'}</h3><p className="mt-2 text-sm leading-relaxed whitespace-pre-wrap">{detail.prompt||'The original prompt was not saved.'}</p>{detail.resolution&&<p className="text-xs mt-4 text-white/50">Resolution: {detail.resolution}</p>}{detail.images?.length > 1&&<p className="text-xs mt-2 text-white/50">Selected: Variation #{selectedVarIndex + 1} of {detail.images.length}</p>}{detail.seed!==undefined&&<p className="text-xs mt-2 text-white/50">Seed: {detail.seed}</p>}{actions(detail, detail.images?.[selectedVarIndex])}</div></div></>}
     </dialog>
   </main>;
 }
