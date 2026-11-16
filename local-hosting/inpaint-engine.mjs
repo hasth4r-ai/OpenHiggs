@@ -17,7 +17,15 @@ const request=async(url,options={})=>{
 export async function runInpaint({base,wanRoot,wanOutputRoot,uploadsDir,outputDir,ffmpeg,body,control},send,log) {
   const session=randomUUID(),tag=`inpaint_${session}`,check=()=>{if(control.requested)throw Object.assign(new Error('Cancelled by you.'),{name:'AbortError'});};
   const snapshot=async()=>{const r=await request(`${base}/deepy/deepy_api/state`);if(!r.ok)throw new Error('Wan2GP is not reachable.');return r.json();};
-  const initial=await snapshot();if(initial.busy||initial.progress)throw new Error('Wan2GP is busy. Wait for the current generation to finish.');
+  let initial=await snapshot();
+  if(initial.busy||initial.progress) {
+    send({type:'progress',pct:0,phase:'Queued · Waiting for GPU to become free…',step:0,total:0,eta:null});
+    while(initial.busy||initial.progress) {
+      check();
+      await new Promise(r=>setTimeout(r,2000));
+      initial=await snapshot();
+    }
+  }
   if(!PRORES[body.profile||'422hq'])throw new Error('Choose a supported ProRes profile.');
   const source=await uploadedPath(uploadsDir,body.source),mask=await uploadedPath(uploadsDir,body.mask);
   const reference=body.reference?await uploadedPath(uploadsDir,body.reference,'image'):null;
@@ -45,7 +53,12 @@ export async function runInpaint({base,wanRoot,wanOutputRoot,uploadsDir,outputDi
   const form=new FormData();form.append('files',new Blob([zipFiles(files)]),'inpaint.zip');
   phase('Submitting inpaint task');check();
   // Recheck after CPU preparation, before adding anything to the shared queue.
-  const current=await snapshot();if(current.busy||current.progress)throw new Error('Wan2GP became busy. No inpaint task was submitted.');
+  let current=await snapshot();
+  while(current.busy||current.progress) {
+    check();
+    await new Promise(r=>setTimeout(r,2000));
+    current=await snapshot();
+  }
   const uploaded=await request(`${base}/gradio_api/upload`,{method:'POST',body:form});if(!uploaded.ok)throw new Error('Could not upload inpaint task to Wan2GP.');
   const [file]=await uploaded.json();let accepted=false,rejection='';
   await call(base,'load_queue_action',[{path:file,meta:{_type:'gradio.FileData'}}],session,event=>{log(event);if(/(?:Loaded|Merged) 1 task/.test(event.engine?.log||''))accepted=true;if(event.engine?.level==='warning')rejection=event.engine.log;});

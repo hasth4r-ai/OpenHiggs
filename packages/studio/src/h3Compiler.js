@@ -190,15 +190,11 @@ export function compileH3InpaintPrompt({
   hasReference = false,
 }) {
   const clean = (userPrompt || '').replace(/\r?\n+/g, ' ').trim();
-  const refHeader = hasReference
-    ? `subject_definitions: <Subject 1> is the replacement reference in <Picture 1>, matching their exact features, style, and identity. summary: [image inpaint] Replace the masked region with <Subject 1>. retention_analysis: <Subject 1> is transferred into the masked area while the rest of the image is fully preserved. `
-    : '';
-
-  const action = mode === 'clean_plate'
-    ? `Inpaint and seamlessly reconstruct the masked area to blend naturally with the surrounding background textures, materials, and ambient lighting. Clean plate removal of the unwanted element without artifacts.`
-    : hasReference
-    ? `Replace the masked area with <Subject 1> from <Picture 1>. Seamlessly integrate the new element into the composition, matching perspective, lighting, depth, and shadow interactions. ${clean}`
-    : `Replace the masked area with: ${clean || 'the described subject'}. Seamlessly integrate the new element into the composition, matching perspective, lighting, depth, and shadow interactions.`;
-
-  return `${refHeader}integrated_multimodal_description: [Shot 1] Edit the image within the masked area. ${action}`.trim();
+  if (mode === 'clean_plate') {
+    return `Edit <Picture 1>. Remove the painted unwanted elements, watermarks, and text, and seamlessly reconstruct the clean background with matching surface textures, materials, and ambient lighting. Keep all other parts of <Picture 1>, the subjects, faces, background, and lighting completely unchanged.`;
+  }
+  if (hasReference) {
+    return `Edit <Picture 1>. Replace the masked region with the subject from <Picture 2>. Seamlessly integrate the new element, matching perspective, shadows, depth, and ambient lighting. Keep all other parts of <Picture 1> unchanged. ${clean}`;
+  }
+  return `Edit <Picture 1>. Replace the masked region with ${clean || 'the specified replacement'}. Seamlessly integrate the replacement, matching perspective, lighting, and ambient shadows. Keep all other parts of <Picture 1> unchanged.`;
 }

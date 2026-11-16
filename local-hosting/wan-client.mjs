@@ -59,8 +59,19 @@ export async function generate({base,wanRoot,wanOutputRoot,uploadsDir,outputDir,
   checkCancelled();
   const session=randomUUID(), tag=`openhiggs_${session}`;
   const snapshot=async()=>{const r=await fetch(`${base}/deepy/deepy_api/state`); if(!r.ok) throw new Error('Wan2GP shared generation API is unavailable'); return r.json();};
-  const initial=await snapshot();
-  if(initial.busy || initial.progress) throw new Error('Wan2GP is busy. Wait for its current job to finish.');
+
+  // Queue instead of failing if Wan2GP is busy
+  let currentState = await snapshot();
+  if (currentState.busy || currentState.progress) {
+    send?.({ type: 'progress', pct: 0, phase: 'Queued · Waiting for GPU to finish current job…', step: 0, total: 0, eta: null });
+    while (currentState.busy || currentState.progress) {
+      checkCancelled();
+      await new Promise(r => setTimeout(r, 2000));
+      currentState = await snapshot();
+    }
+    send?.({ type: 'progress', pct: 0, phase: 'Preparing local GPU pipeline…', step: 0, total: 0, eta: null });
+  }
+
   const settings=JSON.parse(await fs.readFile(path.join(wanRoot,'settings','minimax_h3_ref2va_pruned_settings.json'),'utf8'));
   const files=[], refs={image:[],video:[],audio:[]};
   for(const ref of body.references || []) {
@@ -145,18 +156,57 @@ export async function generateImage({base,wanRoot,wanOutputRoot,uploadsDir,outpu
   checkCancelled();
   const session=randomUUID(), tag=`openhiggs_img_${session}`;
   const snapshot=async()=>{const r=await fetch(`${base}/deepy/deepy_api/state`); if(!r.ok) throw new Error('Wan2GP shared generation API is unavailable'); return r.json();};
-  const initial=await snapshot();
-  if(initial.busy || initial.progress) throw new Error('Wan2GP is busy. Wait for its current job to finish.');
+
+  // Queue gracefully instead of failing when GPU is busy
+  let currentState = await snapshot();
+  if (currentState.busy || currentState.progress) {
+    send?.({ type: 'progress', pct: 0, phase: 'Queued · Waiting for GPU to finish current job…', step: 0, total: 0, eta: null });
+    while (currentState.busy || currentState.progress) {
+      checkCancelled();
+      await new Promise(r => setTimeout(r, 2000));
+      currentState = await snapshot();
+    }
+    send?.({ type: 'progress', pct: 0, phase: 'Preparing local GPU pipeline…', step: 0, total: 0, eta: null });
+  }
 
   const isMiniMax = body.model ? String(body.model).toLowerCase().includes('minimax') : true;
-  const settingsFile = isMiniMax ? 'minimax_h3_ref2va_pruned_settings.json' : 'ming_image_0_1_design_settings.json';
-  const defaultModelType = isMiniMax ? 'minimax_h3_ref2va_pruned' : 'ming_image_0_1_design';
+
+  // Prioritize native still image settings
+  let settingsFile = 'minimax_p_h3_image_settings.json';
+  let defaultModelType = 'minimax_p_h3_image';
+  try {
+    await fs.access(path.join(wanRoot, 'settings', settingsFile));
+  } catch {
+    settingsFile = isMiniMax ? 'minimax_h3_ref2va_pruned_settings.json' : 'ming_image_0_1_design_settings.json';
+    defaultModelType = isMiniMax ? 'minimax_h3_ref2va_pruned' : 'ming_image_0_1_design';
+  }
 
   const settings=JSON.parse(await fs.readFile(path.join(wanRoot,'settings',settingsFile),'utf8'));
   const files=[];
-
-  // Packaging references for multi-ref / conditioning
   const refs = [];
+
+  let sourcePathOnDisk = null;
+  let maskPathOnDisk = null;
+
+  // Inpaint / Edit Image source handling: source is Picture 1 (<Picture 1>)
+  if (body.source) {
+    const name = decodeURIComponent(body.source.split('/').pop());
+    if (name) {
+      sourcePathOnDisk = path.join(uploadsDir, name);
+      const entry = `media/source${path.extname(name)}`;
+      try {
+        const sourceData = await fs.readFile(sourcePathOnDisk);
+        files.push([entry, sourceData]);
+        // Put source image as Picture 1 in refs for editing
+        refs.push(entry);
+        settings.image_guide = entry;
+      } catch (err) {
+        console.warn('[WanClient] Failed to read source image:', err.message);
+      }
+    }
+  }
+
+  // Reference images (for replace / multi-ref conditioning)
   const referenceUrls = body.image_urls || (body.references ? body.references.map(r => r.url) : []);
   for (const refUrl of referenceUrls) {
     const name = decodeURIComponent((refUrl || '').split('/').pop());
@@ -169,55 +219,63 @@ export async function generateImage({base,wanRoot,wanOutputRoot,uploadsDir,outpu
     }
   }
 
-  // Packaging inpaint source and mask if provided
-  const isInpaint = Boolean(body.source && body.mask);
-  if (body.source) {
-    const name = decodeURIComponent(body.source.split('/').pop());
-    if (name) {
-      const entry = `media/source${path.extname(name)}`;
-      try {
-        files.push([entry, await fs.readFile(path.join(uploadsDir, name))]);
-        settings.image_guide = entry;
-        settings.video_guide = entry;
-      } catch {}
-    }
-  }
+  // Mask handling
   if (body.mask) {
     const name = decodeURIComponent(body.mask.split('/').pop());
     if (name) {
+      maskPathOnDisk = path.join(uploadsDir, name);
       const entry = `media/mask${path.extname(name)}`;
       try {
-        files.push([entry, await fs.readFile(path.join(uploadsDir, name))]);
+        files.push([entry, await fs.readFile(maskPathOnDisk)]);
         settings.image_mask = entry;
-        settings.video_mask = entry;
       } catch {}
     }
   }
 
+  // Calculate target resolution preserving source aspect ratio exactly
+  const round32 = n => Math.max(32, Math.round(n / 32) * 32);
   let targetRes = '1024x1024';
-  const ar = body.aspect_ratio || body.ar || '1:1';
-  if (ar === '16:9') targetRes = '1280x720';
-  else if (ar === '9:16') targetRes = '720x1280';
-  else if (ar === '4:3') targetRes = '1024x768';
-  else if (ar === '3:4') targetRes = '768x1024';
-  else if (ar === '3:2') targetRes = '1152x768';
-  else if (ar === '2:3') targetRes = '768x1152';
-  else if (ar === '21:9') targetRes = '1280x550';
-  else targetRes = '1024x1024';
+
+  if (body.resolution && /^\d+x\d+$/.test(body.resolution)) {
+    const [rw, rh] = body.resolution.split('x').map(Number);
+    targetRes = `${round32(rw)}x${round32(rh)}`;
+  } else if (body.aspect_ratio || body.ar) {
+    const arStr = String(body.aspect_ratio || body.ar);
+    if (arStr.includes('/')) {
+      const [nw, nh] = arStr.split('/').map(s => Number(s.trim()));
+      if (nw && nh && nh > 0) {
+        const ratio = nw / nh;
+        const area = 1024 * 1024;
+        const w = round32(Math.sqrt(area * ratio));
+        const h = round32(Math.sqrt(area / ratio));
+        targetRes = `${w}x${h}`;
+      }
+    } else if (arStr === '16:9') targetRes = '1280x704';
+    else if (arStr === '9:16') targetRes = '704x1280';
+    else if (arStr === '4:3') targetRes = '1024x768';
+    else if (arStr === '3:4') targetRes = '768x1024';
+    else if (arStr === '3:2') targetRes = '1152x768';
+    else if (arStr === '2:3') targetRes = '768x1152';
+    else if (arStr === '21:9') targetRes = '1280x544';
+  }
 
   const batchCount = Math.max(1, Math.min(4, Number(body.batch_size || body.batchCount || 1)));
 
-  const videoPromptType = isInpaint
-    ? (refs.length ? 'GMVAI' : 'GMVA')
-    : (refs.length ? 'I' : '');
+  // "KI": Edit First Image at its Own Proportions; "I": with references; "": text-to-image
+  const videoPromptType = body.source ? 'KI' : (refs.length ? 'I' : '');
+  // image_mode must be 1 for still image outputs (image_mode: 2 routes to video inpaint)
+  const imageMode = 1;
 
-  const imageMode = isInpaint ? 2 : 1;
+  let promptText = body.compiledPrompt || body.prompt;
+  if (body.source && body.editMode === 'clean_plate') {
+    promptText = body.compiledPrompt || 'Edit <Picture 1>. Remove the painted unwanted text/watermarks/elements and seamlessly reconstruct the clean background with matching texture, surface details, and ambient lighting. Keep all other parts of <Picture 1>, characters, faces, background, and lighting completely unchanged.';
+  }
 
   settings.multi_prompts_gen_type = 'FG';
   Object.assign(settings, {
     model_type: defaultModelType,
     image_mode: imageMode,
-    prompt: body.compiledPrompt || body.prompt,
+    prompt: promptText,
     resolution: targetRes,
     num_inference_steps: Number(body.steps) || (isMiniMax ? 8 : 12),
     batch_size: 1,
@@ -227,8 +285,8 @@ export async function generateImage({base,wanRoot,wanOutputRoot,uploadsDir,outpu
     client_id: session,
     image_refs: refs.length ? refs : null,
     video_prompt_type: videoPromptType,
-    denoising_strength: isInpaint ? Number(body.denoise ?? (body.editMode === 'replace' ? 0.95 : 0.85)) : 1.0,
-    masking_strength: 1,
+    denoising_strength: 1.0,
+    masking_strength: 1.0,
     mask_expand: Number(body.mask_expand ?? 16),
     custom_settings: {
       ...(settings.custom_settings || {}),
@@ -317,6 +375,28 @@ export async function generateImage({base,wanRoot,wanOutputRoot,uploadsDir,outpu
   }
 
   const matches = await findAll(rootDir);
+
+  // Fallback for Clean Plate if model finished without a PNG: use high-quality local inpaint compositor
+  const pythonVenv = 'C:\\pinokio\\api\\wan.git\\app\\venv\\Scripts\\python.exe';
+  const compositorScript = path.resolve(wanRoot, '..', 'local-hosting', 'composite-image.py');
+
+  if (!matches.length && sourcePathOnDisk && maskPathOnDisk) {
+    console.warn('[WanClient] Wan2GP did not output image, falling back to clean plate alpha compositor');
+    const outName = `${tag}.png`;
+    const destPath = path.join(outputDir, outName);
+    await execFileAsync(pythonVenv, [
+      compositorScript,
+      '--source', sourcePathOnDisk,
+      '--mask', maskPathOnDisk,
+      '--output', destPath,
+      '--feather', '4',
+      '--dilate', '2'
+    ]);
+    const results = [{ imageUrl: `/api/generations/${encodeURIComponent(outName)}`, fileName: outName }];
+    send?.({ type: 'done', imageUrl: results[0].imageUrl, fileName: results[0].fileName, results });
+    return { results, imageUrl: results[0].imageUrl, fileName: results[0].fileName };
+  }
+
   if(!matches.length) throw new Error(`Wan2GP finished without an output image. ${pollingError || 'Check Wan2GP log.'}`);
 
   matches.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
@@ -328,7 +408,27 @@ export async function generateImage({base,wanRoot,wanOutputRoot,uploadsDir,outpu
     const ext = path.extname(src);
     const outName = matches.length === 1 ? `${tag}${ext}` : `${tag}_${idx + 1}${ext}`;
     const destPath = path.join(outputDir, outName);
-    await fs.copyFile(src, destPath);
+
+    // If source and mask are provided, perform alpha compositing for bit-for-bit unmasked preservation
+    if (sourcePathOnDisk && maskPathOnDisk) {
+      try {
+        await execFileAsync(pythonVenv, [
+          compositorScript,
+          '--source', sourcePathOnDisk,
+          '--generated', src,
+          '--mask', maskPathOnDisk,
+          '--output', destPath,
+          '--feather', '4',
+          '--dilate', '2'
+        ]);
+      } catch (compErr) {
+        console.warn('[WanClient] Alpha composite failed, copying raw output:', compErr.message);
+        await fs.copyFile(src, destPath);
+      }
+    } else {
+      await fs.copyFile(src, destPath);
+    }
+
     results.push({
       imageUrl: `/api/generations/${encodeURIComponent(outName)}`,
       fileName: outName

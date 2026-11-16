@@ -909,8 +909,8 @@ export default function ImageStudio({ apiKey, initialSubTab = 'create', onSubTab
 
                   {/* Interactive Mask Brush Canvas Overlay */}
                   <div 
-                    style={{ aspectRatio: sourceDim.ar }}
-                    className="relative w-full max-h-[50vh] rounded-2xl overflow-hidden bg-black/60 border border-white/10 flex items-center justify-center mx-auto"
+                    style={{ aspectRatio: sourceDim.ar, maxWidth: '100%', maxHeight: '50vh' }}
+                    className="relative w-full rounded-2xl overflow-hidden bg-black/60 border border-white/10 flex items-center justify-center mx-auto"
                   >
                     <img 
                       src={editSource.url} 
@@ -925,7 +925,7 @@ export default function ImageStudio({ apiKey, initialSubTab = 'create', onSubTab
                           canvasRef.current.height = nh;
                         }
                       }}
-                      className="w-full h-full object-cover pointer-events-none select-none"
+                      className="w-full h-full object-contain pointer-events-none select-none"
                     />
                     <canvas
                       ref={canvasRef}

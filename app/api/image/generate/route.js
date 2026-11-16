@@ -1,7 +1,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { saveGeneration, runId } from '../../../../local-hosting/generation-history.mjs';
+import { saveGeneration, runId, activeTasks } from '../../../../local-hosting/generation-history.mjs';
+import { acquireGeneration, releaseGeneration } from '../../../../local-hosting/generation-lock.mjs';
 import { getInstallRoot } from '../../../../local-hosting/root.mjs';
 import { generateImage } from '../../../../local-hosting/wan-client.mjs';
 
@@ -27,8 +28,8 @@ export async function POST(request) {
   let body;
   try {
     body = await request.json();
-    if (!String(body.prompt || '').trim()) {
-      throw new Error('Please enter a prompt.');
+    if (!String(body.prompt || '').trim() && !body.source) {
+      throw new Error('Please enter a prompt or upload an image to edit.');
     }
   } catch (e) {
     return Response.json({ error: e.message }, { status: 400 });
@@ -41,10 +42,31 @@ export async function POST(request) {
   const outputDir = path.join(root, 'data', 'generations');
   await fs.mkdir(outputDir, { recursive: true });
 
-  const rawAr = body.aspect_ratio || body.ar || '1:1';
-  const normalizedAr = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '21:9'].includes(rawAr) ? rawAr : '1:1';
-  const { width, height } = parseDimensions(normalizedAr, body.resolution || body.quality);
-  const sizeString = `${width}x${height}`;
+  let sizeString = '1024x1024';
+  let normalizedAr = '1:1';
+
+  // Support explicit resolution from image editor sourceDim
+  if (body.resolution && /^\d+x\d+$/.test(body.resolution)) {
+    sizeString = body.resolution;
+    const [w, h] = body.resolution.split('x').map(Number);
+    normalizedAr = `${w}:${h}`;
+  } else {
+    const rawAr = body.aspect_ratio || body.ar || '1:1';
+    if (String(rawAr).includes('/')) {
+      normalizedAr = String(rawAr).replace(/\s+/g, '');
+      const [w, h] = normalizedAr.split('/').map(Number);
+      const multiple = 32;
+      const area = 1024 * 1024;
+      const ratio = (w && h) ? w / h : 1;
+      const calcW = Math.max(32, Math.round(Math.sqrt(area * ratio) / multiple) * multiple);
+      const calcH = Math.max(32, Math.round(Math.sqrt(area / ratio) / multiple) * multiple);
+      sizeString = `${calcW}x${calcH}`;
+    } else {
+      normalizedAr = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '21:9'].includes(rawAr) ? rawAr : '1:1';
+      const { width, height } = parseDimensions(normalizedAr, body.resolution || body.quality);
+      sizeString = `${width}x${height}`;
+    }
+  }
 
   // MiniMax API Key resolution (request header, body payload, or env variable)
   const authHeader = request.headers.get('authorization') || '';
@@ -52,22 +74,22 @@ export async function POST(request) {
 
   const batchCount = Math.max(1, Math.min(4, Number(body.batch_size || body.batchCount || 1)));
 
-  // Initial pending record in history feed (matches VideoStudio and standard platforms)
+  // Initial pending record in history feed
   const record = {
     id,
     runId,
     createdAt: new Date().toISOString(),
     status: 'generating',
     model: modelName,
-    workflow: 'image',
-    prompt: body.prompt,
+    workflow: body.source ? 'edit' : 'image',
+    prompt: body.prompt || '',
     compiledPrompt: body.compiledPrompt || '',
     references: Array.isArray(body.references) ? body.references : [],
     aspectRatio: normalizedAr,
     resolution: sizeString,
     batchCount,
-    progress: 5,
-    phase: 'Preparing local GPU pipeline',
+    progress: 0,
+    phase: 'Queued · Waiting for GPU…',
     eta: null
   };
   try {
@@ -76,12 +98,34 @@ export async function POST(request) {
     console.warn('[ImageGenerate] Failed to record initial state:', err);
   }
 
-  // 1. Primary: Run directly through local Wan2GP GPU queue (100% local open-source)
+  const control = {
+    requested: false,
+    finished: false,
+    onCancel: async () => {
+      record.status = 'cancelled';
+      record.phase = 'Cancelled';
+      await saveGeneration(record).catch(() => {});
+    }
+  };
+  activeTasks.set(id, control);
+
+  // Gracefully acquire lock / queue in FIFO line
+  await acquireGeneration(id, ({ position }) => {
+    record.phase = `Queued · #${position} in line…`;
+    saveGeneration(record).catch(() => {});
+  });
+
   try {
+    // 1. Primary: Run directly through local Wan2GP GPU queue
     const configPath = path.join(root, 'config', 'wan-engine.json');
     const rawConfig = await fs.readFile(configPath, 'utf8');
     const config = JSON.parse(rawConfig.replace(/^\uFEFF/, ''));
+
     if (config.baseUrl) {
+      record.phase = 'Preparing local GPU pipeline';
+      record.progress = 5;
+      await saveGeneration(record).catch(() => {});
+
       const res = await generateImage(
         {
           base: config.baseUrl,
@@ -89,6 +133,7 @@ export async function POST(request) {
           wanOutputRoot: config.wanOutputRoot,
           uploadsDir: path.join(root, 'data', 'uploads'),
           outputDir,
+          control,
           body: {
             ...body,
             prompt: body.prompt,
@@ -142,7 +187,7 @@ export async function POST(request) {
       }
     }
   } catch (wanErr) {
-    console.warn('[ImageGenerate] Wan2GP local generation failed/busy:', wanErr.message);
+    console.warn('[ImageGenerate] Wan2GP local generation error:', wanErr.message);
     if (!apiKey) {
       Object.assign(record, {
         status: 'failed',
@@ -152,6 +197,10 @@ export async function POST(request) {
       await saveGeneration(record).catch(() => {});
       return Response.json({ error: wanErr.message || 'Local GPU generation failed.' }, { status: 500 });
     }
+  } finally {
+    control.finished = true;
+    activeTasks.delete(id);
+    releaseGeneration(id);
   }
 
   // 2. Cloud Fallback if API key was explicitly provided
