@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { 
   ImageStudio, 
   VideoStudio, 
@@ -21,24 +21,142 @@ const TABS = [
   { id: 'cinema', label: 'Cinema Studio', shortLabel: 'Cinema', icon: <ClapperboardIcon className="w-4 h-4" /> },
 ];
 
-export default function StandaloneShell() {
-  const [activeTab, setActiveTab] = useState('video');
+function getUrlForTab(tab, subTab) {
+  if (tab === 'video') {
+    const sub = subTab || 'create';
+    if (sub === 'edit' || sub === 'inpaint') return '/video/inpaint';
+    if (sub === 'motion' || sub === 'motioncontrol') return '/video/motioncontrol';
+    return '/video/create';
+  }
+  if (tab === 'image') {
+    const sub = subTab || 't2i';
+    if (sub === 'i2i') return '/image/i2i';
+    return '/image/t2i';
+  }
+  if (tab === 'lipsync' || tab === 'audio') {
+    const sub = subTab || 'image';
+    if (sub === 'video') return '/audio/video';
+    return '/audio/image';
+  }
+  if (tab === 'cinema') {
+    return '/cinema';
+  }
+  return '/video/create';
+}
+
+function getPageTitle(tab, subTab) {
+  if (tab === 'video') {
+    if (subTab === 'inpaint' || subTab === 'edit') return 'OpenHiggs · Video Inpaint';
+    if (subTab === 'motioncontrol' || subTab === 'motion') return 'OpenHiggs · Motion Control';
+    return 'OpenHiggs · Create Video';
+  }
+  if (tab === 'image') {
+    if (subTab === 'i2i') return 'OpenHiggs · Image to Image';
+    return 'OpenHiggs · Text to Image';
+  }
+  if (tab === 'lipsync' || tab === 'audio') {
+    if (subTab === 'video') return 'OpenHiggs · Video LipSync';
+    return 'OpenHiggs · Image LipSync';
+  }
+  if (tab === 'cinema') return 'OpenHiggs · Cinema Studio';
+  return 'OpenHiggs';
+}
+
+function parsePathname(pathname) {
+  if (!pathname) return null;
+  const p = pathname.toLowerCase();
+  if (p.startsWith('/video/inpaint') || p.startsWith('/video/edit')) {
+    return { tab: 'video', subTab: 'inpaint' };
+  }
+  if (p.startsWith('/video/motioncontrol') || p.startsWith('/video/motion')) {
+    return { tab: 'video', subTab: 'motioncontrol' };
+  }
+  if (p.startsWith('/video')) {
+    return { tab: 'video', subTab: 'create' };
+  }
+  if (p.startsWith('/image/i2i')) {
+    return { tab: 'image', subTab: 'i2i' };
+  }
+  if (p.startsWith('/image')) {
+    return { tab: 'image', subTab: 't2i' };
+  }
+  if (p.startsWith('/audio/video') || p.startsWith('/lipsync/video')) {
+    return { tab: 'lipsync', subTab: 'video' };
+  }
+  if (p.startsWith('/audio') || p.startsWith('/lipsync')) {
+    return { tab: 'lipsync', subTab: 'image' };
+  }
+  if (p.startsWith('/cinema')) {
+    return { tab: 'cinema', subTab: null };
+  }
+  return null;
+}
+
+export default function StandaloneShell({ initialTab = 'video', initialSubTab = null }) {
+  const [activeTab, setActiveTab] = useState(initialTab);
+  const [videoSubTab, setVideoSubTab] = useState(() => initialTab === 'video' ? (initialSubTab || 'create') : 'create');
+  const [imageSubTab, setImageSubTab] = useState(() => initialTab === 'image' ? (initialSubTab || 't2i') : 't2i');
+  const [audioSubTab, setAudioSubTab] = useState(() => (initialTab === 'lipsync' || initialTab === 'audio') ? (initialSubTab || 'image') : 'image');
   const [showSettings, setShowSettings] = useState(false);
 
+  // Sync state when URL popstate (Back/Forward) occurs
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('openhiggs_active_studio_tab');
-      if (saved && TABS.some(t => t.id === saved)) {
-        setActiveTab(saved);
+    const handlePopState = () => {
+      const parsed = parsePathname(window.location.pathname);
+      if (parsed) {
+        setActiveTab(parsed.tab);
+        if (parsed.tab === 'video' && parsed.subTab) setVideoSubTab(parsed.subTab);
+        if (parsed.tab === 'image' && parsed.subTab) setImageSubTab(parsed.subTab);
+        if (parsed.tab === 'lipsync' && parsed.subTab) setAudioSubTab(parsed.subTab);
+        document.title = getPageTitle(parsed.tab, parsed.subTab);
       }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Update browser URL and title smoothly without page reload
+  const navigateTo = useCallback((tab, subTab) => {
+    const newUrl = getUrlForTab(tab, subTab);
+    const newTitle = getPageTitle(tab, subTab);
+    if (typeof window !== 'undefined' && window.location.pathname !== newUrl) {
+      window.history.pushState(null, '', newUrl);
+      document.title = newTitle;
+    }
+    try {
+      localStorage.setItem('openhiggs_active_studio_tab', tab);
     } catch {}
   }, []);
 
   const switchTab = (tabId) => {
     setActiveTab(tabId);
-    try {
-      localStorage.setItem('openhiggs_active_studio_tab', tabId);
-    } catch {}
+    let sub = null;
+    if (tabId === 'video') sub = videoSubTab;
+    if (tabId === 'image') sub = imageSubTab;
+    if (tabId === 'lipsync') sub = audioSubTab;
+    navigateTo(tabId, sub);
+  };
+
+  const handleVideoSubTabChange = (newSubTab) => {
+    setVideoSubTab(newSubTab);
+    if (activeTab === 'video') {
+      navigateTo('video', newSubTab);
+    }
+  };
+
+  const handleImageSubTabChange = (newSubTab) => {
+    setImageSubTab(newSubTab);
+    if (activeTab === 'image') {
+      navigateTo('image', newSubTab);
+    }
+  };
+
+  const handleAudioSubTabChange = (newSubTab) => {
+    setAudioSubTab(newSubTab);
+    if (activeTab === 'lipsync') {
+      navigateTo('lipsync', newSubTab);
+    }
   };
 
   return (
@@ -120,9 +238,27 @@ export default function StandaloneShell() {
           MAIN WORKSPACE VIEWPORT (100% Height, No Top Header)
           ────────────────────────────────────────────────────────── */}
       <main className="flex-1 min-w-0 h-full overflow-hidden bg-[var(--bg-app,rgb(9,9,11))]">
-        {activeTab === 'image' && <ImageStudio apiKey={null} />}
-        {activeTab === 'video' && <VideoStudio apiKey={null} />}
-        {activeTab === 'lipsync' && <LipSyncStudio apiKey={null} />}
+        {activeTab === 'image' && (
+          <ImageStudio 
+            apiKey={null} 
+            initialSubTab={imageSubTab} 
+            onSubTabChange={handleImageSubTabChange} 
+          />
+        )}
+        {activeTab === 'video' && (
+          <VideoStudio 
+            apiKey={null} 
+            initialSubTab={videoSubTab} 
+            onSubTabChange={handleVideoSubTabChange} 
+          />
+        )}
+        {activeTab === 'lipsync' && (
+          <LipSyncStudio 
+            apiKey={null} 
+            initialSubTab={audioSubTab} 
+            onSubTabChange={handleAudioSubTabChange} 
+          />
+        )}
         {activeTab === 'cinema' && <CinemaStudio apiKey={null} />}
       </main>
 

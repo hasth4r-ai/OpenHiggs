@@ -603,19 +603,38 @@ function SimpleDropdown({ title, options, selected, onSelect, onClose }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function ImageStudio({ apiKey, onGenerationComplete, historyItems }) {
+export default function ImageStudio({ apiKey, onGenerationComplete, historyItems, initialSubTab, onSubTabChange }) {
   // ── Model / mode state ──────────────────────────────────────────────────
-  const [imageMode, setImageMode] = useState(false); // false=t2i, true=i2i
-  const [selectedModelId, setSelectedModelId] = useState(t2iModels[0].id);
-  const [selectedModelName, setSelectedModelName] = useState(t2iModels[0].name);
+  const [imageMode, setImageMode] = useState(initialSubTab === 'i2i'); // false=t2i, true=i2i
+  const initialModelList = initialSubTab === 'i2i' ? i2iModels : t2iModels;
+  const [selectedModelId, setSelectedModelId] = useState(initialModelList[0].id);
+  const [selectedModelName, setSelectedModelName] = useState(initialModelList[0].name);
   const [selectedAr, setSelectedAr] = useState(
-    t2iModels[0].inputs?.aspect_ratio?.default || "1:1"
+    initialModelList[0].inputs?.aspect_ratio?.default || "1:1"
   );
   const [selectedQuality, setSelectedQuality] = useState(() => {
-    const resolutions = getResolutionsForModel(t2iModels[0].id);
+    const resolutions = initialSubTab === 'i2i' 
+      ? getResolutionsForI2IModel(initialModelList[0].id) 
+      : getResolutionsForModel(initialModelList[0].id);
     return resolutions[0] || null;
   });
-  const [maxImages, setMaxImages] = useState(1);
+  const [maxImages, setMaxImages] = useState(initialSubTab === 'i2i' ? getMaxImagesForI2IModel(initialModelList[0].id) : 1);
+
+  useEffect(() => {
+    if (initialSubTab === 'i2i' && !imageMode) {
+      const firstI2I = i2iModels[0];
+      const ars = getAspectRatiosForI2IModel(firstI2I.id);
+      const resolutions = getResolutionsForI2IModel(firstI2I.id);
+      setImageMode(true);
+      setSelectedModelId(firstI2I.id);
+      setSelectedModelName(firstI2I.name);
+      setSelectedAr(ars[0] || "1:1");
+      setSelectedQuality(resolutions[0] || null);
+      setMaxImages(getMaxImagesForI2IModel(firstI2I.id));
+    } else if (initialSubTab === 't2i' && imageMode) {
+      handleUploadClear();
+    }
+  }, [initialSubTab]);
 
   // ── Prompt / upload state ───────────────────────────────────────────────
   const [prompt, setPrompt] = useState("");
@@ -684,6 +703,7 @@ export default function ImageStudio({ apiKey, onGenerationComplete, historyItems
         const ars = getAspectRatiosForI2IModel(firstI2I.id);
         const resolutions = getResolutionsForI2IModel(firstI2I.id);
         setImageMode(true);
+        onSubTabChange?.('i2i');
         setSelectedModelId(firstI2I.id);
         setSelectedModelName(firstI2I.name);
         setSelectedAr(ars[0] || "1:1");
@@ -691,12 +711,13 @@ export default function ImageStudio({ apiKey, onGenerationComplete, historyItems
         setMaxImages(getMaxImagesForI2IModel(firstI2I.id));
       }
     },
-    [imageMode]
+    [imageMode, onSubTabChange]
   );
 
   const handleUploadClear = useCallback(() => {
     setUploadedImageUrls([]);
     setImageMode(false);
+    onSubTabChange?.('t2i');
     const firstT2I = t2iModels[0];
     const ars = getAspectRatiosForModel(firstT2I.id);
     const resolutions = getResolutionsForModel(firstT2I.id);

@@ -1,9 +1,5 @@
-import StandaloneShell from '@/components/StandaloneShell';
+import { redirect } from 'next/navigation';
 
-export const metadata = {
-  title: 'OpenHiggs',
-};
-
-export default function StudioPage() {
-  return <StandaloneShell />;
+export default function StudioRedirect() {
+  redirect('/video/create');
 }

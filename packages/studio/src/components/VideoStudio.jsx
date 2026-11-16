@@ -54,11 +54,30 @@ const CAMERA_PRESETS = [
   },
 ];
 
-export default function VideoStudio({ apiKey }) {
+const normalizeSubTab = (tab) => {
+  if (tab === 'inpaint' || tab === 'edit') return 'edit';
+  if (tab === 'motioncontrol' || tab === 'motion') return 'motion';
+  return 'create';
+};
+
+export default function VideoStudio({ apiKey, initialSubTab, onSubTabChange }) {
   // Navigation sub-tabs
-  const [subTab, setSubTab] = useState('create'); // 'create' | 'edit' | 'motion'
+  const [subTab, setSubTab] = useState(() => normalizeSubTab(initialSubTab));
   const [inpaintDraft,setInpaintDraft]=useState(null);
   const [refMode, setRefMode] = useState('references'); // 'references' | 'frames'
+
+  useEffect(() => {
+    if (initialSubTab) {
+      setSubTab(normalizeSubTab(initialSubTab));
+    }
+  }, [initialSubTab]);
+
+  const handleSubTabChange = (newTab) => {
+    const normalized = normalizeSubTab(newTab);
+    setSubTab(normalized);
+    const externalName = normalized === 'edit' ? 'inpaint' : normalized === 'motion' ? 'motioncontrol' : 'create';
+    onSubTabChange?.(externalName);
+  };
 
   // Model & Presets
   const [activePreset, setActivePreset] = useState(CAMERA_PRESETS[0]);
@@ -100,7 +119,11 @@ export default function VideoStudio({ apiKey }) {
       const raw = localStorage.getItem('openhiggs_video_studio_state_v1');
       if (!raw) return;
       const s = JSON.parse(raw);
-      if (s.subTab && ['create', 'edit', 'motion'].includes(s.subTab)) setSubTab(s.subTab);
+      if (!initialSubTab && s.subTab && ['create', 'edit', 'motion'].includes(s.subTab)) {
+        setSubTab(s.subTab);
+        const externalName = s.subTab === 'edit' ? 'inpaint' : s.subTab === 'motion' ? 'motioncontrol' : 'create';
+        onSubTabChange?.(externalName);
+      }
       if (s.refMode && ['references', 'frames'].includes(s.refMode)) setRefMode(s.refMode);
       if (typeof s.prompt === 'string') setPrompt(s.prompt);
       if (s.duration) setDuration(s.duration);
@@ -417,7 +440,7 @@ export default function VideoStudio({ apiKey }) {
         className={`h-full w-full ${subTab === 'edit' ? 'block' : 'hidden'}`}
         aria-hidden={subTab !== 'edit'}
       >
-        <InpaintStudio onNavigate={setSubTab} initialDraft={inpaintDraft} blocked={isGenerating}/>
+        <InpaintStudio onNavigate={handleSubTabChange} initialDraft={inpaintDraft} blocked={isGenerating}/>
       </div>
 
       {/* Sub-tab 2: Motion Control */}
@@ -425,7 +448,7 @@ export default function VideoStudio({ apiKey }) {
         className={`h-full w-full ${subTab === 'motion' ? 'block' : 'hidden'}`}
         aria-hidden={subTab !== 'motion'}
       >
-        <MotionControlStudio onNavigate={setSubTab} blocked={isGenerating}/>
+        <MotionControlStudio onNavigate={handleSubTabChange} blocked={isGenerating}/>
       </div>
 
       {/* Sub-tab 3: Create Video */}
@@ -441,7 +464,7 @@ export default function VideoStudio({ apiKey }) {
       <aside className="studio-sidebar flex-shrink-0 bg-[#111115] shadow-2xl flex flex-col h-full overflow-y-auto custom-scrollbar">
         
         {/* Sub-tabs: Create Video | Edit Video | Motion Control */}
-        <VideoWorkflowTabs active={subTab} onChange={setSubTab}/>
+        <VideoWorkflowTabs active={subTab} onChange={handleSubTabChange}/>
 
         <div className="p-4 flex flex-col gap-4 flex-1">
 
@@ -1025,7 +1048,7 @@ export default function VideoStudio({ apiKey }) {
       </aside>
 
       <GenerationHistory refreshKey={historyVersion} disabled={isGenerating} onReuse={item => {
-        if(item.workflow==='inpaint'){setInpaintDraft(item.inpaintRequest);setSubTab('edit');return;}
+        if(item.workflow==='inpaint'){setInpaintDraft(item.inpaintRequest);handleSubTabChange('edit');return;}
         setPrompt(item.prompt || '');
         if (Number(item.duration) > 0) setDuration((Number(item.duration) > 7.5 ? 10 : 5) + 's');
         if (['480p', '720p', '1080p'].includes(item.quality)) setQuality(item.quality);

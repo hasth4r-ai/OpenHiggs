@@ -231,9 +231,23 @@ const VideoIcon = ({ className = 'text-muted group-hover:text-primary transition
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
-export default function LipSyncStudio({ apiKey, onGenerationComplete, historyItems }) {
+export default function LipSyncStudio({ apiKey, onGenerationComplete, historyItems, initialSubTab, onSubTabChange }) {
     // ── Mode & model state ──────────────────────────────────────────────────
-    const [inputMode, setInputMode] = useState('image'); // 'image' | 'video'
+    const [inputMode, setInputMode] = useState(initialSubTab === 'video' ? 'video' : 'image'); // 'image' | 'video'
+
+    useEffect(() => {
+        if (initialSubTab === 'video' && inputMode !== 'video') {
+            setInputMode('video');
+            setVideoUrl(null);
+            setVideoState(UPLOAD_STATE.IDLE);
+            setVideoName('');
+        } else if (initialSubTab === 'image' && inputMode !== 'image') {
+            setInputMode('image');
+            setImageUrl(null);
+            setImageState(UPLOAD_STATE.IDLE);
+            setImageName('');
+        }
+    }, [initialSubTab]);
 
     const currentModels = inputMode === 'image' ? imageLipSyncModels : videoLipSyncModels;
     const firstModel = currentModels[0];
@@ -370,6 +384,7 @@ export default function LipSyncStudio({ apiKey, onGenerationComplete, historyIte
     const switchToImage = () => {
         if (inputMode === 'image') return;
         setInputMode('image');
+        onSubTabChange?.('image');
         setVideoUrl(null);
         setVideoState(UPLOAD_STATE.IDLE);
         setVideoName('');
@@ -378,6 +393,7 @@ export default function LipSyncStudio({ apiKey, onGenerationComplete, historyIte
     const switchToVideo = () => {
         if (inputMode === 'video') return;
         setInputMode('video');
+        onSubTabChange?.('video');
         setImageUrl(null);
         setImageState(UPLOAD_STATE.IDLE);
         setImageName('');
