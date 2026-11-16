@@ -53,18 +53,17 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
   const dialog=useRef(null);
   const containerRef=useRef(null);
   const [colCount,setColCount]=useState(5);
+  const [dateFilter,setDateFilter]=useState('all');
   const [pending,setPending]=useState(null);
   const [deleted,setDeleted]=useState(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
     const update = (w) => {
-      if (w < 500) setColCount(2);
-      else if (w < 780) setColCount(3);
-      else if (w < 1100) setColCount(4);
-      else if (w < 1450) setColCount(5);
-      else if (w < 1800) setColCount(6);
-      else setColCount(7);
+      if (w < 640) setColCount(2);
+      else if (w < 960) setColCount(3);
+      else if (w < 1280) setColCount(4);
+      else setColCount(5); // Fixed strictly at 5 cards per row on desktop
     };
     update(containerRef.current.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 1200));
     const observer = new ResizeObserver((entries) => {
@@ -127,7 +126,46 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
   });
 
   const filtered=typeFiltered.filter(i=>(filter==='all'||i.status===filter||(filter==='failed'&&i.status==='interrupted'))&&`${i.prompt} ${i.model} ${i.fileName}`.toLowerCase().includes(query.toLowerCase()));
-  const groups=Object.entries(filtered.reduce((out,item)=>{(out[dateLabel(item.createdAt)] ||= []).push(item);return out;},{}));
+
+  const dateFiltered = filtered.filter(i => {
+    if (dateFilter === 'all') return true;
+    if (!i.createdAt) return false;
+    const itemDate = new Date(i.createdAt);
+    const today = new Date();
+    if (dateFilter === 'today') {
+      return itemDate.toDateString() === today.toDateString();
+    }
+    if (dateFilter === 'yesterday') {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      return itemDate.toDateString() === yesterday.toDateString();
+    }
+    if (dateFilter === '7days') {
+      return (today.getTime() - itemDate.getTime()) <= 7 * 24 * 60 * 60 * 1000;
+    }
+    if (dateFilter === '30days') {
+      return (today.getTime() - itemDate.getTime()) <= 30 * 24 * 60 * 60 * 1000;
+    }
+    return dateLabel(i.createdAt) === dateFilter;
+  });
+
+  const dateOptions = [
+    ['all', 'All dates'],
+    ['today', 'Today'],
+    ['yesterday', 'Yesterday'],
+    ['7days', 'Last 7 days'],
+    ['30days', 'Last 30 days']
+  ];
+  const uniqueDates = Array.from(
+    new Set(
+      typeFiltered
+        .map(i => dateLabel(i.createdAt))
+        .filter(d => d && d !== 'Today' && d !== 'Yesterday')
+    )
+  );
+  uniqueDates.forEach(d => {
+    dateOptions.push([d, d]);
+  });
   const button='rounded-xl bg-white/5 hover:bg-white/10 px-3 py-2 text-xs font-semibold text-white/80 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all interactive-hover';
 
   const preview=(item, inModal = false)=>{
@@ -505,9 +543,17 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
             <HistoryClockIcon className="w-4 h-4 text-white/70"/>
             History
           </span>
-          <span className="text-xs text-white/40">
-            {typeFiltered.length} {mediaType === 'image' ? 'images' : mediaType === 'video' ? 'videos' : 'items'}
+          <span className="text-xs text-white/40 font-mono">
+            {dateFiltered.length} {mediaType === 'image' ? 'images' : mediaType === 'video' ? 'videos' : 'items'}
           </span>
+          <div className="w-40 relative z-30">
+            <CustomSelect
+              value={dateFilter}
+              onChange={e => setDateFilter(e.target.value)}
+              options={dateOptions}
+              className="!bg-[var(--bg-card,#14141a)] !py-2 !rounded-xl !border-white/5 text-xs font-medium"
+            />
+          </div>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
           <input 
@@ -558,45 +604,34 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
       <div ref={containerRef} className="px-6 pb-12 pt-4 w-full">
         {loading ? (
           <p className="py-12 text-sm text-white/40 text-center">Loading {mediaType === 'image' ? 'images' : mediaType === 'video' ? 'videos' : 'generations'}…</p>
-        ) : groups.length === 0 ? (
+        ) : dateFiltered.length === 0 ? (
           <div className="min-h-[55vh] flex flex-col items-center justify-center text-center gap-3">
             <ClapperboardIcon className="w-10 h-10 text-white/20"/>
             <h1 className="text-lg font-semibold">{items.length?`No matching ${mediaType === 'image' ? 'images' : mediaType === 'video' ? 'videos' : 'generations'}`:`Your ${mediaType === 'image' ? 'images' : mediaType === 'video' ? 'videos' : 'generations'} will appear here`}</h1>
             <p className="text-sm text-white/40">{items.length?'Try another search or filter.':'Add a prompt or references, then click Generate.'}</p>
           </div>
+        ) : view === 'masonry' ? (
+          <div className="flex gap-2 w-full items-start">
+            {Array.from({ length: colCount }, (_, colIdx) => {
+              const colItems = dateFiltered.filter((_, idx) => idx % colCount === colIdx);
+              return (
+                <div key={colIdx} className="flex-1 flex flex-col gap-2 min-w-0">
+                  {colItems.map(item => renderCard(item))}
+                </div>
+              );
+            })}
+          </div>
+        ) : view === 'grid' ? (
+          <div 
+            className="grid gap-2 w-full"
+            style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}
+          >
+            {dateFiltered.map(item => renderCard(item))}
+          </div>
         ) : (
-          groups.map(([day,entries])=>(
-            <section key={day} aria-label={day} className="mb-8 w-full">
-              <h2 className="text-xs font-semibold text-white/40 py-3 uppercase tracking-wider flex items-center gap-2">
-                <span>{day}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/5 font-mono text-white/30">{entries.length}</span>
-              </h2>
-
-              {view === 'masonry' ? (
-                <div className="flex gap-2 w-full items-start">
-                  {Array.from({ length: colCount }, (_, colIdx) => {
-                    const colItems = entries.filter((_, idx) => idx % colCount === colIdx);
-                    return (
-                      <div key={colIdx} className="flex-1 flex flex-col gap-2 min-w-0">
-                        {colItems.map(item => renderCard(item))}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : view === 'grid' ? (
-                <div 
-                  className="grid gap-2 w-full"
-                  style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}
-                >
-                  {entries.map(item => renderCard(item))}
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2 w-full">
-                  {entries.map(item => renderCard(item))}
-                </div>
-              )}
-            </section>
-          ))
+          <div className="flex flex-col gap-2 w-full">
+            {dateFiltered.map(item => renderCard(item))}
+          </div>
         )}
       </div>
 
