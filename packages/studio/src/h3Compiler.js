@@ -12,7 +12,7 @@ export function compileH3Prompt({
   cameraMotion = '',
   mode = 'video',
 }) {
-  const cleanPrompt = (userPrompt || '').trim();
+  const cleanPrompt = (userPrompt || '').replace(/\r?\n+/g, ' ').trim();
 
   // If there are no references and prompt is empty, return empty
   if (!cleanPrompt && references.length === 0) {

@@ -204,6 +204,7 @@ export async function generateImage({base,wanRoot,wanOutputRoot,uploadsDir,outpu
 
   const batchCount = Math.max(1, Math.min(4, Number(body.batch_size || body.batchCount || 1)));
 
+  settings.multi_prompts_gen_type = 'FG';
   Object.assign(settings, {
     model_type: defaultModelType,
     image_mode: 1,

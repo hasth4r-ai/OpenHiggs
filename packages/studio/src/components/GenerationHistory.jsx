@@ -155,7 +155,7 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
             key={singleUrl} 
             src={singleUrl} 
             alt={item.prompt || 'Generated image'} 
-            className="w-full h-auto object-cover select-none block rounded-2xl" 
+            className="w-full h-auto object-cover select-none block rounded-xl transition-transform duration-300 group-hover:scale-[1.02]" 
             loading="lazy"
           />
         );
@@ -183,7 +183,9 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
             loop
             playsInline 
             preload="metadata" 
-            className="w-full h-auto object-cover select-none block aspect-video rounded-2xl" 
+            onMouseEnter={e => e.currentTarget.play().catch(() => {})}
+            onMouseLeave={e => { e.currentTarget.pause(); e.currentTarget.currentTime = 0.1; }}
+            className="w-full h-auto object-cover select-none block aspect-video rounded-xl transition-transform duration-300 group-hover:scale-[1.02]" 
             aria-label={`Generated video: ${item.prompt || 'Video'}`}
           />
         );
@@ -272,14 +274,23 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/5 font-mono text-white/30">{entries.length}</span>
               </h2>
 
-              {/* Masonry / Grid / List Layout */}
-              <div className={
-                view === 'masonry'
-                  ? 'columns-1 sm:columns-2 lg:columns-3 2xl:columns-4 gap-4'
-                  : view === 'grid'
-                  ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4'
-                  : 'flex flex-col gap-4'
-              }>
+              {/* Masonry / Grid / List Layout - minimum 4 to 5 cards per row */}
+              <div 
+                className={
+                  view === 'masonry'
+                    ? 'gap-3.5'
+                    : view === 'grid'
+                    ? 'gap-3.5'
+                    : 'flex flex-col gap-3.5'
+                }
+                style={
+                  view === 'masonry'
+                    ? { columnWidth: '220px', columnGap: '14px' }
+                    : view === 'grid'
+                    ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '14px' }
+                    : undefined
+                }
+              >
                 {entries.map(item => {
                   const itemIsImage = item.workflow === 'image' || (item.model && item.model.toLowerCase().includes('image')) || /\.(png|jpe?g|webp)$/i.test(item.fileName || item.url || '');
                   const hasMultiple = item.images && item.images.length > 1;
@@ -290,8 +301,12 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
                     <article 
                       key={item.id}
                       onClick={() => { setSelectedVarIndex(0); setDetail(item); }}
-                      className={`group relative overflow-hidden rounded-2xl bg-[#14141a] border border-white/5 hover:border-[var(--color-accent)]/50 transition-all duration-300 shadow-md hover:shadow-2xl cursor-pointer ${
-                        view === 'masonry' ? 'break-inside-avoid mb-4' : view === 'grid' ? 'aspect-square flex items-center justify-center' : 'flex flex-col sm:flex-row'
+                      className={`group relative overflow-hidden rounded-xl bg-[#14141a] border border-white/5 hover:border-[var(--color-accent)]/50 transition-all duration-300 shadow-md hover:shadow-2xl cursor-pointer ${
+                        view === 'masonry' 
+                          ? 'break-inside-avoid mb-3.5 inline-block w-full align-top' 
+                          : view === 'grid' 
+                          ? 'aspect-square flex items-center justify-center' 
+                          : 'flex flex-col sm:flex-row'
                       }`}
                     >
                       <div className="relative w-full h-full overflow-hidden bg-[#0c0c10] flex items-center justify-center">
