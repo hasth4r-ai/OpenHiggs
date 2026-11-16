@@ -191,10 +191,9 @@ export default function ImageStudio({ apiKey, initialSubTab = 't2i', onSubTabCha
       setGenerationStatus('Executing MiniMax H3 Image DiT…');
       setGenerationProgress(50);
 
-      const effectiveKey = apiKey || minimaxKey;
       const res = subTab === 'i2i' 
-        ? await generateI2I(effectiveKey, genParams)
-        : await generateImage(effectiveKey, genParams);
+        ? await generateI2I(apiKey, genParams)
+        : await generateImage(apiKey, genParams);
 
       setGenerationProgress(100);
       setGenerationStatus('Completed');
