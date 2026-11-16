@@ -220,15 +220,33 @@ export default function MotionControlStudio({ onNavigate, blocked = false }) {
         <VideoWorkflowTabs active="motion" onChange={onNavigate} />
 
         <div className="p-4 flex flex-col gap-4 flex-1">
-          {/* Header Description */}
-          <div>
-            <h1 className="text-sm font-bold text-white flex items-center gap-2">
-              <CompassIcon className="w-4 h-4 text-white/70" />
-              <span>Camera Motion Control</span>
-            </h1>
-            <p className="text-[11px] text-white/40 mt-0.5">
-              Animate a still image with precise camera trajectory & velocity
-            </p>
+          {/* Model / Motion Cover Banner */}
+          <div 
+            className="relative rounded-2xl p-3.5 flex items-center justify-between group overflow-hidden transition-all duration-300 shadow-xl border border-white/10"
+            style={{
+              backgroundImage: `linear-gradient(to right, rgba(17, 17, 24, 0.88) 20%, rgba(17, 17, 24, 0.60) 65%, rgba(17, 17, 24, 0.25) 100%), url('/assets/models/minimax-h3.png')`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }}
+          >
+            <div className="flex items-center gap-3 z-10">
+              <div className="w-12 h-12 rounded-xl bg-black/50 backdrop-blur-md border border-white/15 flex items-center justify-center overflow-hidden shadow-inner p-1">
+                <img src="/assets/models/minimax-color.png" alt="MiniMax" className="w-8 h-8 object-contain" />
+              </div>
+              <div className="flex flex-col">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-black text-white tracking-wider uppercase drop-shadow">
+                    MiniMax H3 Motion
+                  </span>
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[var(--color-accent)] text-white shadow-sm">
+                    Active
+                  </span>
+                </div>
+                <span className="text-[11px] text-white/70 font-semibold drop-shadow">
+                  Kinematic camera trajectories &amp; parallax animation
+                </span>
+              </div>
+            </div>
           </div>
 
           {/* 1. Source Image Slot */}

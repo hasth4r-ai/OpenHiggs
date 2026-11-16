@@ -40,10 +40,16 @@ export async function POST(request) {
   const outputDir = path.join(root, 'data', 'generations');
   await fs.mkdir(outputDir, { recursive: true });
 
-  const { width, height } = parseDimensions(body.aspect_ratio || body.ar, body.resolution || body.quality);
+  const rawAr = body.aspect_ratio || body.ar || '1:1';
+  const normalizedAr = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '21:9'].includes(rawAr) ? rawAr : '1:1';
+  const { width, height } = parseDimensions(normalizedAr, body.resolution || body.quality);
   const sizeString = `${width}x${height}`;
 
-  // Check if a local MiniMax-H3-Image SGLang / vLLM server is running on standard port 30000 or 8000
+  // MiniMax API Key resolution (request header, body payload, or env variable)
+  const authHeader = request.headers.get('authorization') || '';
+  const apiKey = authHeader.replace(/^Bearer\s+/i, '').trim() || body.apiKey || process.env.MINIMAX_API_KEY || '';
+
+  // 1. Try local SGLang / vLLM / Diffusers server on standard ports (30000 or 8000)
   const candidateUrls = [
     process.env.MINIMAX_H3_IMAGE_URL,
     'http://127.0.0.1:30000',
@@ -77,37 +83,78 @@ export async function POST(request) {
     } catch {}
   }
 
-  const fileName = `image_${id}.png`;
-  const filePath = path.join(outputDir, fileName);
+  // 2. If local server did not respond and an API key is provided, route through MiniMax Cloud API
+  if (!generatedBuffer && apiKey) {
+    const cloudEndpoints = [
+      'https://api.minimax.io/v1/image_generation',
+      'https://api.minimaxi.chat/v1/image_generation',
+      'https://api.minimax.io/v1/images/generations'
+    ];
 
-  if (generatedBuffer) {
-    await fs.writeFile(filePath, generatedBuffer);
-  } else {
-    // If local inference server is warming up or weights are placed in engine,
-    // generate an initial placeholder with model metadata watermark
-    // so user flow never halts.
-    // SVG banner generated directly
-    const svg = `
-      <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#0f0f18"/>
-            <stop offset="50%" stop-color="#181824"/>
-            <stop offset="100%" stop-color="#241b2f"/>
-          </linearGradient>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#bg)"/>
-        <circle cx="${width / 2}" cy="${height / 2 - 40}" r="${Math.min(width, height) / 5}" fill="#6366f1" opacity="0.08" filter="blur(60px)"/>
-        <text x="50%" y="45%" text-anchor="middle" fill="#ffffff" font-family="system-ui, sans-serif" font-size="${Math.max(24, Math.floor(width / 32))}" font-weight="900" letter-spacing="2">MINIMAX H3 IMAGE</text>
-        <text x="50%" y="52%" text-anchor="middle" fill="#a5b4fc" font-family="system-ui, sans-serif" font-size="${Math.max(14, Math.floor(width / 50))}" font-weight="600">33.1B DiT · Native ${sizeString} Synthesis</text>
-        <text x="50%" y="60%" text-anchor="middle" fill="#8888aa" font-family="system-ui, sans-serif" font-size="${Math.max(12, Math.floor(width / 60))}" max-width="80%">${body.prompt.slice(0, 80)}...</text>
-      </svg>
-    `;
-    await fs.writeFile(filePath.replace('.png', '.svg'), svg.trim());
+    for (const endpoint of cloudEndpoints) {
+      try {
+        const isImageGen = endpoint.endsWith('/image_generation');
+        const payload = isImageGen
+          ? {
+              model: 'image-01',
+              prompt: body.prompt,
+              aspect_ratio: normalizedAr,
+              response_format: 'url'
+            }
+          : {
+              model: 'image-01',
+              prompt: body.prompt,
+              size: sizeString,
+              response_format: 'b64_json'
+            };
+
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(90000)
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          // Check for URL or b64 response
+          const imgUrl = data?.data?.[0]?.url || data?.image_url || data?.data?.image_url;
+          const b64 = data?.data?.[0]?.b64_json || data?.b64_json;
+
+          if (imgUrl) {
+            const imgRes = await fetch(imgUrl);
+            if (imgRes.ok) {
+              const arrayBuf = await imgRes.arrayBuffer();
+              generatedBuffer = Buffer.from(arrayBuf);
+              break;
+            }
+          } else if (b64) {
+            generatedBuffer = Buffer.from(b64, 'base64');
+            break;
+          }
+        }
+      } catch (err) {
+        console.warn(`[ImageGenerate] Cloud endpoint ${endpoint} failed:`, err.message);
+      }
+    }
   }
 
-  const finalFileName = generatedBuffer ? fileName : fileName.replace('.png', '.svg');
-  const imageUrl = `/api/generations/${finalFileName}`;
+  // 3. If neither local inference server nor API key yielded a real image, return a clear diagnostic
+  if (!generatedBuffer) {
+    return Response.json({
+      error: 'MiniMax H3 Image is not currently running locally on port 30000, and no MiniMax API Key was provided. Please start the local SGLang inference server (weights ~68 GB) or enter a MINIMAX_API_KEY for cloud rendering.'
+    }, { status: 400 });
+  }
+
+  // 4. Save the generated PNG image to data/generations
+  const fileName = `image_${id}.png`;
+  const filePath = path.join(outputDir, fileName);
+  await fs.writeFile(filePath, generatedBuffer);
+
+  const imageUrl = `/api/generations/${fileName}`;
 
   const record = {
     id,
@@ -117,10 +164,10 @@ export async function POST(request) {
     model: modelName,
     workflow: 'image',
     prompt: body.prompt,
-    aspectRatio: body.aspect_ratio || '1:1',
+    aspectRatio: normalizedAr,
     resolution: sizeString,
     url: imageUrl,
-    fileName: finalFileName
+    fileName
   };
 
   try {
@@ -132,7 +179,7 @@ export async function POST(request) {
   return Response.json({
     id,
     url: imageUrl,
-    fileName: finalFileName,
+    fileName,
     model: modelName,
     prompt: body.prompt
   });

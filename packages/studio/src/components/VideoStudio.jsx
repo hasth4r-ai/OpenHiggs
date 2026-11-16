@@ -472,7 +472,7 @@ export default function VideoStudio({ apiKey, initialSubTab, onSubTabChange }) {
           <div 
             className="relative rounded-2xl p-3.5 flex items-center justify-between group overflow-hidden transition-all duration-300 shadow-xl border border-white/10"
             style={{
-              backgroundImage: `linear-gradient(to right, rgba(17, 17, 24, 0.95) 25%, rgba(17, 17, 24, 0.78) 65%, rgba(17, 17, 24, 0.45) 100%), url('/assets/models/minimax-h3.png')`,
+              backgroundImage: `linear-gradient(to right, rgba(17, 17, 24, 0.88) 20%, rgba(17, 17, 24, 0.60) 65%, rgba(17, 17, 24, 0.25) 100%), url('/assets/models/minimax-h3.png')`,
               backgroundSize: 'cover',
               backgroundPosition: 'center',
             }}

@@ -115,16 +115,42 @@ export default function InpaintStudio({onNavigate,initialDraft,blocked=false}) {
     <aside className="studio-sidebar shrink-0 overflow-y-auto custom-scrollbar bg-[#111115] shadow-2xl">
       <VideoWorkflowTabs active="edit" onChange={onNavigate}/>
       <div className="p-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-base font-semibold">Video Inpaint</h1>
-            <p className="text-xs text-white/40 mt-1">Wan 2.1 Vace 14B & MiniMax H3 · masked footage editing</p>
+        {/* Model / Inpaint Cover Banner */}
+        <div 
+          className="relative rounded-2xl p-3.5 flex items-center justify-between group overflow-hidden transition-all duration-300 shadow-xl border border-white/10"
+          style={{
+            backgroundImage: `linear-gradient(to right, rgba(17, 17, 24, 0.88) 20%, rgba(17, 17, 24, 0.60) 65%, rgba(17, 17, 24, 0.25) 100%), url('/assets/models/minimax-h3.png')`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }}
+        >
+          <div className="flex items-center gap-3 z-10">
+            <div className="w-12 h-12 rounded-xl bg-black/50 backdrop-blur-md border border-white/15 flex items-center justify-center overflow-hidden shadow-inner p-1">
+              <img 
+                src={form.model === 'minimax_h3' ? '/assets/models/minimax-color.png' : '/assets/models/wan-logo.png'} 
+                alt="Model Logo" 
+                className="w-8 h-8 object-contain" 
+              />
+            </div>
+            <div className="flex flex-col">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-black text-white tracking-wider uppercase drop-shadow">
+                  {form.model === 'minimax_h3' ? 'MiniMax H3 Video' : 'Wan 2.1 Vace 14B'}
+                </span>
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[var(--color-accent)] text-white shadow-sm">
+                  Inpaint
+                </span>
+              </div>
+              <span className="text-[11px] text-white/70 font-semibold drop-shadow">
+                Masked footage editing &amp; clean plate synthesis
+              </span>
+            </div>
           </div>
           <button
             type="button"
             onClick={resetToDefaults}
             disabled={generating}
-            className="text-[11px] text-white/40 hover:text-white px-2 py-1 rounded-md bg-white/[0.04] hover:bg-white/[0.08] transition-colors"
+            className="z-10 text-[11px] font-bold text-white/80 hover:text-white bg-black/60 hover:bg-black/85 border border-white/20 backdrop-blur-md px-2.5 py-1.5 rounded-xl transition-all cursor-pointer shadow-md"
             title="Reset all inpaint settings and inputs to default"
           >
             Reset

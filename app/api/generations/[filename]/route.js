@@ -9,6 +9,9 @@ const MIME_TYPES = {
   '.mov': 'video/quicktime',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+  '.webp': 'image/webp',
 };
 
 export async function GET(request, { params }) {

@@ -61,10 +61,12 @@ export function uploadFile(apiKey, file, onProgress) {
 }
 
 export async function generateImage(apiKey, params) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
   const res = await fetch('/api/image/generate', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(params)
+    headers,
+    body: JSON.stringify({ ...params, apiKey })
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -74,10 +76,12 @@ export async function generateImage(apiKey, params) {
 }
 
 export async function generateI2I(apiKey, params) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
   const res = await fetch('/api/image/generate', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...params, mode: 'i2i' })
+    headers,
+    body: JSON.stringify({ ...params, mode: 'i2i', apiKey })
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
