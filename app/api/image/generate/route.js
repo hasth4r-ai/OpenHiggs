@@ -145,7 +145,7 @@ export async function POST(request) {
   // 3. If neither local inference server nor API key yielded a real image, return a clear diagnostic
   if (!generatedBuffer) {
     return Response.json({
-      error: 'MiniMax H3 Image is not currently running locally on port 30000, and no MiniMax API Key was provided. Please start the local SGLang inference server (weights ~68 GB) or enter a MINIMAX_API_KEY for cloud rendering.'
+      error: 'MiniMax H3 Image local model is not running on port 30000. Please launch the local open-source model using "scripts\\Start MiniMax H3 Image.cmd".'
     }, { status: 400 });
   }
 
