@@ -9,7 +9,11 @@ function Get-OpenHiggsContext {
     if ($server.BindAddress -ne '127.0.0.1') { throw 'This installation is configured for this PC only. BindAddress must be 127.0.0.1.' }
     if ([int]$server.Port -lt 1024 -or [int]$server.Port -gt 65535) { throw 'Invalid local server port.' }
     $nodePath = Join-Path $runtime.Directory 'node.exe'
-    $repoPath = Join-Path $rootPath 'repo'
+    $repoPath = if (Test-Path -LiteralPath (Join-Path $rootPath 'openhiggs')) {
+        Join-Path $rootPath 'openhiggs'
+    } else {
+        Join-Path $rootPath 'repo'
+    }
     if (-not (Test-Path -LiteralPath $nodePath)) { throw 'The portable Node.js runtime is missing.' }
     $env:PATH = $runtime.Directory + ';' + $env:PATH
     $env:NEXT_TELEMETRY_DISABLED = '1'
