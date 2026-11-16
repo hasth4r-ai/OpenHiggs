@@ -47,6 +47,16 @@ config/*.json
 *.ckpt
 *.pt
 *.bin
+*.onnx
+*.pth
+__pycache__/
+*.py[cod]
+engine/ckpts/
+engine/outputs/
+engine/venv/
+engine/.cache/
+engine/workspaces/*.json
+!engine/workspaces/02f4200c1b2947b88882a906712d4df8.json
 
 # Preserve static UI template assets
 !docs/assets/**
