@@ -51,8 +51,32 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
   const [detail,setDetail]=useState(null),[notice,setNotice]=useState(''),[now,setNow]=useState(Date.now());
   const [selectedVarIndex,setSelectedVarIndex]=useState(0);
   const dialog=useRef(null);
+  const containerRef=useRef(null);
+  const [colCount,setColCount]=useState(5);
   const [pending,setPending]=useState(null);
   const [deleted,setDeleted]=useState(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const update = (w) => {
+      if (w < 500) setColCount(2);
+      else if (w < 780) setColCount(3);
+      else if (w < 1100) setColCount(4);
+      else if (w < 1450) setColCount(5);
+      else if (w < 1800) setColCount(6);
+      else setColCount(7);
+    };
+    update(containerRef.current.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 1200));
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect.width > 0) {
+          update(entry.contentRect.width);
+        }
+      }
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   const act=async(item,action)=>{
     setPending(item.id);
@@ -268,6 +292,211 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
     );
   };
 
+  const renderCard = (item) => {
+    const itemIsImage = item.workflow === 'image' || (item.model && item.model.toLowerCase().includes('image')) || /\.(png|jpe?g|webp)$/i.test(item.fileName || item.url || '');
+    const hasMultiple = item.images && item.images.length > 1;
+    const currentMedia = (item.images && item.images[0]) || { url: item.videoUrl || item.url || item.imageUrl, fileName: item.fileName };
+    const mediaUrl = currentMedia.url;
+
+    return (
+      <article 
+        key={item.id}
+        onClick={() => { setSelectedVarIndex(0); setDetail(item); }}
+        onMouseEnter={(e) => {
+          const vid = e.currentTarget.querySelector('video');
+          if (vid) {
+            vid.loop = true;
+            vid.play().catch(() => {});
+          }
+        }}
+        onMouseLeave={(e) => {
+          const vid = e.currentTarget.querySelector('video');
+          if (vid) {
+            vid.pause();
+            vid.currentTime = 0.1;
+          }
+        }}
+        className={`group relative overflow-hidden rounded-xl bg-[#14141a] border-0 transition-all duration-300 shadow-md hover:shadow-2xl cursor-pointer ${
+          view === 'masonry' 
+            ? 'w-full' 
+            : view === 'grid' 
+            ? 'aspect-square flex items-center justify-center w-full' 
+            : 'flex flex-col sm:flex-row w-full'
+        }`}
+      >
+        <div className={`relative overflow-hidden bg-[#0c0c10] flex items-center justify-center ${
+          view === 'grid' 
+            ? 'h-full w-full' 
+            : view === 'list' 
+            ? 'w-full sm:w-72 sm:max-w-xs flex-shrink-0 h-auto' 
+            : 'w-full h-auto'
+        }`}>
+          {preview(item)}
+
+          {/* Hover Overlay with Metadata and Icon-Only Buttons (for Masonry and Grid) */}
+          {item.status === 'completed' && view !== 'list' && (
+            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-between p-3.5 z-10 pointer-events-none group-hover:pointer-events-auto">
+              {/* Top: Metadata */}
+              <div className="flex items-center justify-between text-xs text-white/90">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="font-bold text-white drop-shadow text-[11px]">{getModelName(item)}</span>
+                  <span className="text-white/40">·</span>
+                  <span className="text-[10px] text-white/70 drop-shadow">{item.quality || item.resolution || (itemIsImage ? '1024x1024' : 'Video')}</span>
+                  {hasMultiple && (
+                    <span className="px-1.5 py-0.5 rounded bg-[var(--color-accent)] text-white text-[9px] font-bold shadow-sm">
+                      Batch ({item.images.length})
+                    </span>
+                  )}
+                </div>
+                <time className="text-[10px] text-white/60 font-mono drop-shadow">
+                  {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </time>
+              </div>
+
+              {/* Bottom: Action Buttons as ICONS ONLY */}
+              <div className="flex items-center justify-end gap-1.5 pt-2">
+                {item.prompt && (
+                  <button
+                    type="button"
+                    title="Reuse settings"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onReuse(item);
+                      setNotice('Settings restored.');
+                    }}
+                    className="w-8 h-8 rounded-xl bg-black/75 hover:bg-[var(--color-accent)] backdrop-blur text-white/80 hover:text-white flex items-center justify-center transition-all shadow border border-white/10"
+                  >
+                    <RefreshIcon className="w-4 h-4" />
+                  </button>
+                )}
+
+                {item.prompt && (
+                  <button
+                    type="button"
+                    title="Copy prompt"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      copy(item);
+                    }}
+                    className="w-8 h-8 rounded-xl bg-black/75 hover:bg-[var(--color-accent)] backdrop-blur text-white/80 hover:text-white flex items-center justify-center transition-all shadow border border-white/10"
+                  >
+                    <CopyIcon className="w-4 h-4" />
+                  </button>
+                )}
+
+                {mediaUrl && (
+                  <a
+                    title="Download"
+                    href={mediaUrl}
+                    download={currentMedia.fileName || item.fileName || 'download'}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-8 h-8 rounded-xl bg-black/75 hover:bg-[var(--color-accent)] backdrop-blur text-white/80 hover:text-white flex items-center justify-center transition-all shadow border border-white/10"
+                  >
+                    <DownloadIcon className="w-4 h-4" />
+                  </a>
+                )}
+
+                <button
+                  type="button"
+                  title="Delete from history"
+                  disabled={pending === item.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    act(item, 'delete');
+                  }}
+                  className="w-8 h-8 rounded-xl bg-black/75 hover:bg-red-500 backdrop-blur text-white/80 hover:text-white flex items-center justify-center transition-all shadow border border-white/10"
+                >
+                  <TrashIcon className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* List View Details Panel */}
+        {view === 'list' && (
+          <div className="flex-1 min-w-0 p-4 flex flex-col justify-between gap-3 bg-[#14141a]">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between text-xs text-white/90">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-white text-xs">{getModelName(item)}</span>
+                  <span className="text-white/30">·</span>
+                  <span className="text-[11px] text-white/70 font-mono">{item.quality || item.resolution || (itemIsImage ? '1024x1024' : 'Video')}</span>
+                  {hasMultiple && (
+                    <span className="px-1.5 py-0.5 rounded bg-[var(--color-accent)] text-white text-[10px] font-bold">
+                      Batch of {item.images.length}
+                    </span>
+                  )}
+                </div>
+                <time className="text-xs text-white/50 font-mono">
+                  {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </time>
+              </div>
+
+              <p className="text-xs text-white/80 line-clamp-3 leading-relaxed">
+                {item.prompt || (item.status === 'completed' ? 'Generation completed.' : item.phase || 'Processing…')}
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-white/5">
+              <div className="flex items-center gap-2">
+                {item.aspectRatio && (
+                  <span className="text-[10px] bg-white/5 px-2 py-0.5 rounded text-white/60 font-mono">
+                    AR: {item.aspectRatio}
+                  </span>
+                )}
+                {item.duration && (
+                  <span className="text-[10px] bg-white/5 px-2 py-0.5 rounded text-white/60 font-mono">
+                    {item.duration}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {item.prompt && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onReuse(item); setNotice('Settings restored.'); }}
+                    className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-[var(--color-accent)] text-white/80 hover:text-white text-xs font-medium flex items-center gap-1.5 transition-all"
+                  >
+                    <RefreshIcon className="w-3.5 h-3.5" /> Reuse
+                  </button>
+                )}
+                {item.prompt && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); copy(item); }}
+                    className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-[var(--color-accent)] text-white/80 hover:text-white text-xs font-medium flex items-center gap-1.5 transition-all"
+                  >
+                    <CopyIcon className="w-3.5 h-3.5" /> Copy
+                  </button>
+                )}
+                {mediaUrl && (
+                  <a
+                    href={mediaUrl}
+                    download={currentMedia.fileName || item.fileName || 'download'}
+                    onClick={(e) => e.stopPropagation()}
+                    className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-[var(--color-accent)] text-white/80 hover:text-white text-xs font-medium flex items-center gap-1.5 transition-all"
+                  >
+                    <DownloadIcon className="w-3.5 h-3.5" /> Download
+                  </a>
+                )}
+                <button
+                  type="button"
+                  disabled={pending === item.id}
+                  onClick={(e) => { e.stopPropagation(); act(item, 'delete'); }}
+                  className="p-1.5 rounded-lg bg-white/5 hover:bg-red-500/80 text-white/80 hover:text-white transition-all"
+                  title="Delete"
+                >
+                  <TrashIcon className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </article>
+    );
+  };
+
   return (
     <main className="flex-1 min-w-0 h-full overflow-y-auto custom-scrollbar bg-[var(--bg-app,rgb(9,9,11))] select-text">
       <header className="sticky top-0 z-20 bg-[var(--bg-app,rgb(9,9,11))]/95 backdrop-blur-md shadow-md px-6 py-4 flex flex-wrap items-center justify-between gap-3 border-b border-white/5">
@@ -326,7 +555,7 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
         </div>
       )}
 
-      <div className="px-6 pb-12 pt-4">
+      <div ref={containerRef} className="px-6 pb-12 pt-4 w-full">
         {loading ? (
           <p className="py-12 text-sm text-white/40 text-center">Loading {mediaType === 'image' ? 'images' : mediaType === 'video' ? 'videos' : 'generations'}…</p>
         ) : groups.length === 0 ? (
@@ -337,227 +566,35 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
           </div>
         ) : (
           groups.map(([day,entries])=>(
-            <section key={day} aria-label={day} className="mb-8">
+            <section key={day} aria-label={day} className="mb-8 w-full">
               <h2 className="text-xs font-semibold text-white/40 py-3 uppercase tracking-wider flex items-center gap-2">
                 <span>{day}</span>
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/5 font-mono text-white/30">{entries.length}</span>
               </h2>
 
-              {/* Masonry / Grid / List Layout - minimum 4 to 5 cards per row, 0.5rem gap */}
-              <div 
-                className={
-                  view === 'masonry'
-                    ? 'columns-2 sm:columns-3 md:columns-4 lg:columns-5 xl:columns-6 2xl:columns-7 gap-2 [column-fill:balance] w-full'
-                    : view === 'grid'
-                    ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-2 w-full'
-                    : 'flex flex-col gap-2 w-full'
-                }
-              >
-                {entries.map(item => {
-                  const itemIsImage = item.workflow === 'image' || (item.model && item.model.toLowerCase().includes('image')) || /\.(png|jpe?g|webp)$/i.test(item.fileName || item.url || '');
-                  const hasMultiple = item.images && item.images.length > 1;
-                  const currentMedia = (item.images && item.images[0]) || { url: item.videoUrl || item.url || item.imageUrl, fileName: item.fileName };
-                  const mediaUrl = currentMedia.url;
-
-                  return (
-                    <article 
-                      key={item.id}
-                      onClick={() => { setSelectedVarIndex(0); setDetail(item); }}
-                      onMouseEnter={(e) => {
-                        const vid = e.currentTarget.querySelector('video');
-                        if (vid) {
-                          vid.loop = true;
-                          vid.play().catch(() => {});
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        const vid = e.currentTarget.querySelector('video');
-                        if (vid) {
-                          vid.pause();
-                          vid.currentTime = 0.1;
-                        }
-                      }}
-                      className={`group relative overflow-hidden rounded-xl bg-[#14141a] border-0 transition-all duration-300 shadow-md hover:shadow-2xl cursor-pointer ${
-                        view === 'masonry' 
-                          ? 'break-inside-avoid mb-2 inline-block w-full align-top' 
-                          : view === 'grid' 
-                          ? 'aspect-square flex items-center justify-center' 
-                          : 'flex flex-col sm:flex-row w-full'
-                      }`}
-                    >
-                      <div className={`relative overflow-hidden bg-[#0c0c10] flex items-center justify-center ${
-                        view === 'grid' 
-                          ? 'h-full w-full' 
-                          : view === 'list' 
-                          ? 'w-full sm:w-72 sm:max-w-xs flex-shrink-0 h-auto' 
-                          : 'w-full h-auto'
-                      }`}>
-                        {preview(item)}
-
-                        {/* Hover Overlay with Metadata and Icon-Only Buttons (for Masonry and Grid) */}
-                        {item.status === 'completed' && view !== 'list' && (
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-between p-3.5 z-10 pointer-events-none group-hover:pointer-events-auto">
-                            {/* Top: Metadata */}
-                            <div className="flex items-center justify-between text-xs text-white/90">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-bold text-white drop-shadow text-[11px]">{getModelName(item)}</span>
-                                <span className="text-white/40">·</span>
-                                <span className="text-[10px] text-white/70 drop-shadow">{item.quality || item.resolution || (itemIsImage ? '1024x1024' : 'Video')}</span>
-                                {hasMultiple && (
-                                  <span className="px-1.5 py-0.5 rounded bg-[var(--color-accent)] text-white text-[9px] font-bold shadow-sm">
-                                    Batch ({item.images.length})
-                                  </span>
-                                )}
-                              </div>
-                              <time className="text-[10px] text-white/60 font-mono drop-shadow">
-                                {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </time>
-                            </div>
-
-                            {/* Bottom: Action Buttons as ICONS ONLY */}
-                            <div className="flex items-center justify-end gap-1.5 pt-2">
-                              {item.prompt && (
-                                <button
-                                  type="button"
-                                  title="Reuse settings"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onReuse(item);
-                                    setNotice('Settings restored.');
-                                  }}
-                                  className="w-8 h-8 rounded-xl bg-black/75 hover:bg-[var(--color-accent)] backdrop-blur text-white/80 hover:text-white flex items-center justify-center transition-all shadow border border-white/10"
-                                >
-                                  <RefreshIcon className="w-4 h-4" />
-                                </button>
-                              )}
-
-                              {item.prompt && (
-                                <button
-                                  type="button"
-                                  title="Copy prompt"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    copy(item);
-                                  }}
-                                  className="w-8 h-8 rounded-xl bg-black/75 hover:bg-[var(--color-accent)] backdrop-blur text-white/80 hover:text-white flex items-center justify-center transition-all shadow border border-white/10"
-                                >
-                                  <CopyIcon className="w-4 h-4" />
-                                </button>
-                              )}
-
-                              {mediaUrl && (
-                                <a
-                                  title="Download"
-                                  href={mediaUrl}
-                                  download={currentMedia.fileName || item.fileName || 'download'}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="w-8 h-8 rounded-xl bg-black/75 hover:bg-[var(--color-accent)] backdrop-blur text-white/80 hover:text-white flex items-center justify-center transition-all shadow border border-white/10"
-                                >
-                                  <DownloadIcon className="w-4 h-4" />
-                                </a>
-                              )}
-
-                              <button
-                                type="button"
-                                title="Delete from history"
-                                disabled={pending === item.id}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  act(item, 'delete');
-                                }}
-                                className="w-8 h-8 rounded-xl bg-black/75 hover:bg-red-500 backdrop-blur text-white/80 hover:text-white flex items-center justify-center transition-all shadow border border-white/10"
-                              >
-                                <TrashIcon className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-                        )}
+              {view === 'masonry' ? (
+                <div className="flex gap-2 w-full items-start">
+                  {Array.from({ length: colCount }, (_, colIdx) => {
+                    const colItems = entries.filter((_, idx) => idx % colCount === colIdx);
+                    return (
+                      <div key={colIdx} className="flex-1 flex flex-col gap-2 min-w-0">
+                        {colItems.map(item => renderCard(item))}
                       </div>
-
-                      {/* List View Details Panel */}
-                      {view === 'list' && (
-                        <div className="flex-1 min-w-0 p-4 flex flex-col justify-between gap-3 bg-[#14141a]">
-                          <div className="flex flex-col gap-2">
-                            <div className="flex items-center justify-between text-xs text-white/90">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-bold text-white text-xs">{getModelName(item)}</span>
-                                <span className="text-white/30">·</span>
-                                <span className="text-[11px] text-white/70 font-mono">{item.quality || item.resolution || (itemIsImage ? '1024x1024' : 'Video')}</span>
-                                {hasMultiple && (
-                                  <span className="px-1.5 py-0.5 rounded bg-[var(--color-accent)] text-white text-[10px] font-bold">
-                                    Batch of {item.images.length}
-                                  </span>
-                                )}
-                              </div>
-                              <time className="text-xs text-white/50 font-mono">
-                                {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </time>
-                            </div>
-
-                            <p className="text-xs text-white/80 line-clamp-3 leading-relaxed">
-                              {item.prompt || (item.status === 'completed' ? 'Generation completed.' : item.phase || 'Processing…')}
-                            </p>
-                          </div>
-
-                          <div className="flex items-center justify-between pt-2 border-t border-white/5">
-                            <div className="flex items-center gap-2">
-                              {item.aspectRatio && (
-                                <span className="text-[10px] bg-white/5 px-2 py-0.5 rounded text-white/60 font-mono">
-                                  AR: {item.aspectRatio}
-                                </span>
-                              )}
-                              {item.duration && (
-                                <span className="text-[10px] bg-white/5 px-2 py-0.5 rounded text-white/60 font-mono">
-                                  {item.duration}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {item.prompt && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => { e.stopPropagation(); onReuse(item); setNotice('Settings restored.'); }}
-                                  className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-[var(--color-accent)] text-white/80 hover:text-white text-xs font-medium flex items-center gap-1.5 transition-all"
-                                >
-                                  <RefreshIcon className="w-3.5 h-3.5" /> Reuse
-                                </button>
-                              )}
-                              {item.prompt && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => { e.stopPropagation(); copy(item); }}
-                                  className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-[var(--color-accent)] text-white/80 hover:text-white text-xs font-medium flex items-center gap-1.5 transition-all"
-                                >
-                                  <CopyIcon className="w-3.5 h-3.5" /> Copy
-                                </button>
-                              )}
-                              {mediaUrl && (
-                                <a
-                                  href={mediaUrl}
-                                  download={currentMedia.fileName || item.fileName || 'download'}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-[var(--color-accent)] text-white/80 hover:text-white text-xs font-medium flex items-center gap-1.5 transition-all"
-                                >
-                                  <DownloadIcon className="w-3.5 h-3.5" /> Download
-                                </a>
-                              )}
-                              <button
-                                type="button"
-                                disabled={pending === item.id}
-                                onClick={(e) => { e.stopPropagation(); act(item, 'delete'); }}
-                                className="p-1.5 rounded-lg bg-white/5 hover:bg-red-500/80 text-white/80 hover:text-white transition-all"
-                                title="Delete"
-                              >
-                                <TrashIcon className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </article>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              ) : view === 'grid' ? (
+                <div 
+                  className="grid gap-2 w-full"
+                  style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}
+                >
+                  {entries.map(item => renderCard(item))}
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2 w-full">
+                  {entries.map(item => renderCard(item))}
+                </div>
+              )}
             </section>
           ))
         )}
