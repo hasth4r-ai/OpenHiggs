@@ -23,7 +23,7 @@ const dateLabel = value => {
   return date.toDateString()===today.toDateString()?'Yesterday':date.toLocaleDateString(undefined,{month:'long',day:'numeric',year:'numeric'});
 };
 
-export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyChange}) {
+export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyChange,mediaType='all'}) {
   const [items,setItems]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState('');
   const [query,setQuery]=useState(''),[filter,setFilter]=useState('all'),[view,setView]=useState('list');
   const [detail,setDetail]=useState(null),[notice,setNotice]=useState(''),[now,setNow]=useState(Date.now());
@@ -35,9 +35,9 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
     try {
       const response=await fetch('/api/history-actions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:item.id,action})});
       const result=await response.json();if(!response.ok)throw new Error(result.error);
-      if(action==='delete'){setDeleted(item);setItems(previous=>previous.filter(i=>i.id!==item.id));if(detail?.id===item.id)dialog.current?.close();setNotice('Removed from history. Saved video kept.');}
+      if(action==='delete'){setDeleted(item);setItems(previous=>previous.filter(i=>i.id!==item.id));if(detail?.id===item.id)dialog.current?.close();setNotice('Removed from history.');}
       else if(action==='restore'){setDeleted(null);setItems(previous=>[...previous.filter(i=>i.id!==item.id),item].sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt)));setNotice('History entry restored.');}
-      else{setItems(previous=>previous.map(i=>i.id===item.id?{...i,cancelRequested:true,phase:'Cancelling…',eta:null}:i));setNotice('Cancellation requested. Waiting for Wan2GP to stop.');}
+      else{setItems(previous=>previous.map(i=>i.id===item.id?{...i,cancelRequested:true,phase:'Cancelling…',eta:null}:i));setNotice('Cancellation requested.');}
     }catch(e){setNotice(e.message);}
     finally{setPending(null);}
   };
@@ -63,24 +63,62 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
   useEffect(()=>{onBusyChange?.(items.some(i=>i.status==='generating'));},[items,onBusyChange]);
   const changeView=value=>{setView(value);localStorage.setItem('openhiggs-history-view',value);};
   const copy=async item=>{try{await navigator.clipboard.writeText(item.prompt);setNotice('Prompt copied');}catch{setNotice('Could not copy. Open the details to select the prompt.');}};
-  const filtered=items.filter(i=>(filter==='all'||i.status===filter||(filter==='failed'&&i.status==='interrupted'))&&`${i.prompt} ${i.model} ${i.fileName}`.toLowerCase().includes(query.toLowerCase()));
+  const typeFiltered = items.filter(i => {
+    if (mediaType === 'image') return i.workflow === 'image' || (!i.videoUrl && (i.url || i.imageUrl));
+    if (mediaType === 'video') return i.workflow !== 'image' && !!i.videoUrl;
+    return true;
+  });
+  const filtered=typeFiltered.filter(i=>(filter==='all'||i.status===filter||(filter==='failed'&&i.status==='interrupted'))&&`${i.prompt} ${i.model} ${i.fileName}`.toLowerCase().includes(query.toLowerCase()));
   const groups=Object.entries(filtered.reduce((out,item)=>{(out[dateLabel(item.createdAt)] ||= []).push(item);return out;},{}));
   const button='rounded-lg bg-white/5 hover:bg-white/10 px-3 py-2 text-xs font-medium text-white/80 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all interactive-hover';
-  const actions=item=><div className="flex flex-wrap items-center gap-2 mt-4">
-    <button className={button} disabled={!item.prompt||busy} onClick={()=>{onReuse(item);dialog.current?.close();setNotice(item.promptSource && !item.references?.length?'Prompt restored. Reattach the original references before generating.':'Settings restored. Edit the prompt, then Generate.');}}>Reuse settings</button>
-    <button className={button} disabled={!item.prompt} onClick={()=>copy(item)}>Copy prompt</button>
-    {item.videoUrl && <a className={button+' flex items-center gap-1.5'} href={item.videoUrl} download={item.fileName}><DownloadIcon className="w-3.5 h-3.5"/>Download</a>}
-    {item.originalUrl && <a className={button+' !text-[var(--color-accent)] font-semibold'} href={item.originalUrl} download={item.originalFileName}>Download ProRes MOV</a>}
-    {item.status==='generating'?<button className={button+' !text-red-300'} disabled={pending===item.id||item.cancelRequested} onClick={()=>act(item,'cancel')}>{item.cancelRequested?'Cancelling…':'Cancel task'}</button>:<button className={button+' !text-white/40 hover:!text-red-300'} disabled={pending===item.id} onClick={()=>act(item,'delete')}>Delete from history</button>}
-  </div>;
-  const preview=item=>item.status==='completed' && item.videoUrl ?
-    <video key={item.videoUrl} src={`${item.videoUrl}#t=0.1`} controls playsInline preload="metadata" className="w-full h-full object-contain bg-[var(--bg-card,#14141a)]" aria-label={`Generated video: ${item.prompt || 'Previous generation'}`}/>:
-    <div className="min-h-52 h-full flex flex-col justify-center items-center p-7 text-center gap-3 bg-[var(--bg-card,#14141a)]">
-      {item.status==='generating'?<><span className="w-8 h-8 border-2 border-white/10 border-t-[var(--color-accent)] rounded-full animate-spin"/><p className="text-xs text-white/80">{item.phase}</p><div role="progressbar" aria-label="Generation progress" aria-valuenow={Math.round(item.progress||0)} aria-valuemin={0} aria-valuemax={100} className="w-full max-w-xs h-1.5 bg-white/10 rounded-full overflow-hidden"><div className="h-full bg-[var(--color-accent)] transition-all" style={{width:`${item.progress||0}%`}}/></div><p className="text-xs text-white/45">{Math.round(item.progress||0)}% · {time((now-Date.parse(item.createdAt))/1000)} elapsed</p><p className="text-xs text-white/45">{Number.isFinite(item.eta)?`About ${time(item.eta)} left in this sampling pass`:'Estimating remaining time…'}</p></>:<><ClapperboardIcon className="w-8 h-8 text-white/30"/><p className="text-sm text-red-300">{item.status==='cancelled'?'Generation cancelled':item.status==='interrupted'?'Generation interrupted':'Generation failed'}</p><p className="text-xs text-white/50 max-w-xs">{item.error}</p></>}
-    </div>;
+  const actions=item=>{
+    const mediaUrl = item.videoUrl || item.url || item.imageUrl;
+    return (
+      <div className="flex flex-wrap items-center gap-2 mt-4">
+        <button className={button} disabled={!item.prompt||busy} onClick={()=>{onReuse(item);dialog.current?.close();setNotice('Settings restored.');}}>Reuse settings</button>
+        <button className={button} disabled={!item.prompt} onClick={()=>copy(item)}>Copy prompt</button>
+        {mediaUrl && <a className={button+' flex items-center gap-1.5'} href={mediaUrl} download={item.fileName || 'download'}><DownloadIcon className="w-3.5 h-3.5"/>Download</a>}
+        {item.originalUrl && <a className={button+' !text-[var(--color-accent)] font-semibold'} href={item.originalUrl} download={item.originalFileName}>Download ProRes MOV</a>}
+        {item.status==='generating'?<button className={button+' !text-red-300'} disabled={pending===item.id||item.cancelRequested} onClick={()=>act(item,'cancel')}>{item.cancelRequested?'Cancelling…':'Cancel task'}</button>:<button className={button+' !text-white/40 hover:!text-red-300'} disabled={pending===item.id} onClick={()=>act(item,'delete')}>Delete from history</button>}
+      </div>
+    );
+  };
+  const preview=item=>{
+    const mediaUrl = item.videoUrl || item.url || item.imageUrl;
+    const isImage = item.workflow === 'image' || (!item.videoUrl && (item.url || item.imageUrl));
+    if (item.status === 'completed' && mediaUrl) {
+      if (isImage) {
+        return (
+          <img 
+            key={mediaUrl} 
+            src={mediaUrl} 
+            alt={item.prompt || 'Generated image'} 
+            className="w-full h-full object-contain bg-[var(--bg-card,#14141a)] select-none" 
+            loading="lazy"
+          />
+        );
+      }
+      return (
+        <video 
+          key={mediaUrl} 
+          src={`${mediaUrl}#t=0.1`} 
+          controls 
+          playsInline 
+          preload="metadata" 
+          className="w-full h-full object-contain bg-[var(--bg-card,#14141a)]" 
+          aria-label={`Generated video: ${item.prompt || 'Previous generation'}`}
+        />
+      );
+    }
+    return (
+      <div className="min-h-52 h-full flex flex-col justify-center items-center p-7 text-center gap-3 bg-[var(--bg-card,#14141a)]">
+        {item.status==='generating'?<><span className="w-8 h-8 border-2 border-white/10 border-t-[var(--color-accent)] rounded-full animate-spin"/><p className="text-xs text-white/80">{item.phase || 'Generating…'}</p><div role="progressbar" aria-label="Generation progress" aria-valuenow={Math.round(item.progress||0)} aria-valuemin={0} aria-valuemax={100} className="w-full max-w-xs h-1.5 bg-white/10 rounded-full overflow-hidden"><div className="h-full bg-[var(--color-accent)] transition-all" style={{width:`${item.progress||0}%`}}/></div><p className="text-xs text-white/45">{Math.round(item.progress||0)}% · {time((now-Date.parse(item.createdAt))/1000)} elapsed</p><p className="text-xs text-white/45">{Number.isFinite(item.eta)?`About ${time(item.eta)} left in this sampling pass`:'Estimating remaining time…'}</p></>:<><ClapperboardIcon className="w-8 h-8 text-white/30"/><p className="text-sm text-red-300">{item.status==='cancelled'?'Generation cancelled':item.status==='interrupted'?'Generation interrupted':'Generation failed'}</p><p className="text-xs text-white/50 max-w-xs">{item.error}</p></>}
+      </div>
+    );
+  };
   return <main className="flex-1 min-w-0 h-full overflow-y-auto custom-scrollbar bg-[var(--bg-app,rgb(9,9,11))] select-text">
     <header className="sticky top-0 z-10 bg-[var(--bg-app,rgb(9,9,11))]/95 backdrop-blur shadow-md px-6 py-4 flex flex-wrap items-center justify-between gap-3">
-      <div className="flex items-center gap-3"><span className="flex items-center gap-2 rounded-lg bg-white/[0.06] px-3 py-2 text-xs font-semibold"><HistoryClockIcon className="w-4 h-4 text-white/70"/>History</span><span className="text-xs text-white/35">{items.length} videos</span></div>
+      <div className="flex items-center gap-3"><span className="flex items-center gap-2 rounded-lg bg-white/[0.06] px-3 py-2 text-xs font-semibold"><HistoryClockIcon className="w-4 h-4 text-white/70"/>History</span><span className="text-xs text-white/35">{typeFiltered.length} {mediaType === 'image' ? 'images' : mediaType === 'video' ? 'videos' : 'items'}</span></div>
       <div className="flex flex-wrap gap-2 items-center">
         <input aria-label="Search generations" placeholder="Search prompts…" value={query} onChange={e=>setQuery(e.target.value)} className="w-40 xl:w-52 text-xs bg-[var(--bg-card,#14141a)] rounded-lg px-3 py-2.5 outline-none focus:ring-1 focus:ring-[var(--color-accent)] text-white transition-all"/>
         <div className="w-36">
@@ -88,7 +126,7 @@ export default function GenerationHistory({refreshKey,onReuse,disabled,onBusyCha
             value={filter}
             onChange={e => setFilter(e.target.value)}
             options={[
-              ['all', 'All videos'],
+              ['all', mediaType === 'image' ? 'All images' : mediaType === 'video' ? 'All videos' : 'All items'],
               ['completed', 'Completed'],
               ['generating', 'In progress'],
               ['cancelled', 'Cancelled'],
